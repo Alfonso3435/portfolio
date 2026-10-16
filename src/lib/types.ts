@@ -14,6 +14,8 @@ export interface DateRange {
 
 export interface Education {
   school: string;
+  /** Compact label for tight spaces, e.g. "UW Allen School · B.S. CS". */
+  short?: string;
   degree: string;
   location: string;
   dates?: DateRange;
@@ -40,6 +42,8 @@ export interface Profile {
   siteUrl: string;
   resumeUrl: string;
   assistantName: string;
+  /** Path under /public, e.g. "/headshot.jpg". The About photo is hidden until set. */
+  headshot?: string;
   links: {
     github: string;
     linkedin: string;
@@ -63,6 +67,8 @@ export interface Experience {
   location?: string;
   dates: DateRange;
   summary: string;
+  /** Few-word hook for the Home highlights strip, e.g. "AI agent · <30 s response". */
+  short?: string;
   highlights: string[];
   stack: string[];
   /** Links to a case study in projects.ts. */
@@ -138,4 +144,25 @@ export interface Certification {
   date?: YearMonth;
   score?: string;
   verifyUrl?: string;
+}
+
+// ── Lab page ────────────────────────────────────────────────────────────────
+
+export interface LabStep {
+  label: string;
+  title: string;
+  description: string;
+  /** The course or past project this step builds on. */
+  foundation?: string;
+}
+
+export type LabToolStatus = "planned" | "in-progress" | "live";
+
+export interface LabTool {
+  name: string;
+  description: string;
+  /** What it reuses from earlier work. */
+  builtOn: string;
+  priority: 1 | 2 | 3;
+  status: LabToolStatus;
 }

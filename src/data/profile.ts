@@ -38,6 +38,7 @@ export const profile: Profile = {
   education: [
     {
       school: "University of Washington — Paul G. Allen School of Computer Science & Engineering",
+      short: "UW Allen School · B.S. CS",
       degree: "B.S. Computer Science",
       location: "Seattle, WA",
       dates: { start: "2026-09" },

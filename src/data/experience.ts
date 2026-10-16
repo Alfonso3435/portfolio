@@ -11,6 +11,7 @@ export const experience: Experience[] = [
     dates: { start: "2025", display: "Late 2025 — Present" },
     summary:
       "AI automation agency for local service businesses on Seattle's Eastside (Bellevue, Redmond, Sammamish, Kirkland).",
+    short: "AI voice agent · <30 s response",
     highlights: [
       "Built an AI voice and SMS agent that answers missed calls, cutting first-response time from hours to under 30 seconds and recovering leads that were previously lost.",
       "Architected an event-driven automation stack on n8n, Supabase and the Claude API, orchestrating 20+ webhook-triggered workflows across lead capture, qualification, booking and follow-up.",
@@ -28,6 +29,7 @@ export const experience: Experience[] = [
     dates: { start: "2026-08" },
     summary:
       "Custom NFC review cards and tabletop displays that let local businesses collect Google reviews with one tap.",
+    short: "NFC review cards",
     highlights: [
       "Built the full e-commerce site in Next.js 16 (App Router), TypeScript and Tailwind CSS v4, deployed on Vercel.",
       "Implemented a React Context + localStorage cart with WhatsApp-based checkout.",
