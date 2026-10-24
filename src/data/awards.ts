@@ -34,7 +34,7 @@ export const awards: Award[] = [
     year: 2025,
     projectSlug: "identifeye",
     summary:
-      "Won 1st place out of 100+ competing teams with IdentifEye, a visual product search that matches customer photos to Liverpool's catalog.",
+      "Won 1st place as team HanLovers, out of 100+ competing teams, with IdentifEye, a visual product search that matches customer photos to Liverpool's catalog.",
   },
   {
     id: "atrato-2024",
@@ -46,6 +46,6 @@ export const awards: Award[] = [
     year: 2024,
     projectSlug: "financeai",
     summary:
-      "Won 1st place with FinanceAI, an AI assistant for financial products with expert matching and embedding-based cost optimization.",
+      "Won 1st place as team Silly Ducks with FinanceAI, an AI assistant for financial products with expert matching and embedding-based cost optimization.",
   },
 ];

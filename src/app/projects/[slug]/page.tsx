@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectMedia } from "@/components/projects/ProjectMedia";
+import { ProjectVideo } from "@/components/projects/ProjectVideo";
 import { Chip } from "@/components/ui/Chip";
 import { Container } from "@/components/ui/Container";
 import { profile } from "@/data/profile";
@@ -107,6 +109,43 @@ export default async function CaseStudyPage({ params }: CaseStudyProps) {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+            </section>
+          ) : null}
+
+          {project.videos?.length ? (
+            <section aria-labelledby="video" className="flex flex-col gap-3">
+              <h2 id="video" className="font-display text-2xl font-bold">
+                {project.videos.length === 1 ? "Video" : "Videos"}
+              </h2>
+              {project.videos.map((video) => (
+                <ProjectVideo key={video.title} video={video} />
+              ))}
+            </section>
+          ) : null}
+
+          {/* images[0] is the cover above; any extra images become a gallery. */}
+          {project.images && project.images.length > 1 ? (
+            <section aria-labelledby="gallery" className="flex flex-col gap-3">
+              <h2 id="gallery" className="font-display text-2xl font-bold">
+                Gallery
+              </h2>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
+                {project.images.slice(1).map((img) => (
+                  <figure key={img.src} className="flex flex-col gap-2">
+                    {/* object-contain: screenshots, diagrams and portrait photos are shown whole, never cropped. */}
+                    <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-line bg-surface-2">
+                      <Image
+                        src={img.src}
+                        alt={img.alt}
+                        fill
+                        sizes="(min-width: 1024px) 360px, 100vw"
+                        className="object-contain p-2"
+                      />
+                    </div>
+                    <figcaption className="text-sm text-muted">{img.alt}</figcaption>
+                  </figure>
+                ))}
+              </div>
             </section>
           ) : null}
         </div>

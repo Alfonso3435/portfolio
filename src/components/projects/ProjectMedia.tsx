@@ -25,7 +25,15 @@ export function ProjectMedia({
   return (
     <div className={`relative overflow-hidden bg-surface-2 ${aspect}`}>
       {cover ? (
-        <Image src={cover.src} alt={cover.alt} fill sizes={sizes} priority={priority} className="object-cover" />
+        <Image
+          src={cover.src}
+          alt={cover.alt}
+          fill
+          sizes={sizes}
+          priority={priority}
+          className="object-cover"
+          style={cover.position ? { objectPosition: cover.position } : undefined}
+        />
       ) : (
         <div
           aria-hidden="true"

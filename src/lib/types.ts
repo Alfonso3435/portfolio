@@ -80,10 +80,30 @@ export type ProjectCategory = "ai-ml" | "full-stack" | "hackathon" | "iot";
 export type ProjectStatus = "shipped" | "prototype" | "in-progress";
 
 export interface ProjectImage {
-  /** Path under /public, e.g. "/projects/identifeye/cover.jpg". */
+  /** Path under /public, e.g. "/projects/identifeye/cover.webp". */
   src: string;
   alt: string;
+  /** CSS object-position for cropped covers, e.g. "top" for tall screenshots. */
+  position?: string;
 }
+
+/** A video hosted on the site (MP4 in /public) or on YouTube. */
+export type ProjectVideo =
+  | {
+      kind: "file";
+      title: string;
+      src: string;
+      poster: string;
+      /** Short silent clip that plays on its own and repeats, like a GIF. */
+      loop?: boolean;
+      credit?: string;
+    }
+  | {
+      kind: "youtube";
+      title: string;
+      /** The id in https://youtu.be/<id>. */
+      youtubeId: string;
+    };
 
 export interface Project {
   /** URL segment: /projects/[slug]. Also the folder name for images. */
@@ -106,7 +126,9 @@ export interface Project {
   /** Links to an entry in awards.ts. */
   awardId?: string;
   links: Partial<Record<"repo" | "demo" | "video" | "site", string>>;
+  /** images[0] is the cover; the rest form the case-study gallery. */
   images?: ProjectImage[];
+  videos?: ProjectVideo[];
 }
 
 export type AwardKind = "win" | "recognition";

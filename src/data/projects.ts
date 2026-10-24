@@ -30,6 +30,13 @@ export const projects: Project[] = [
       "Liverpool publicly congratulated the team on LinkedIn.",
     ],
     awardId: "hackmx-2025",
+    images: [
+      { src: "/projects/identifeye/cover.webp", alt: "IdentifEye title slide: product identification with embeddings and LLM recommendations, by team HanLovers for Liverpool" },
+      { src: "/projects/identifeye/1.webp", alt: "Team HanLovers with their 1st-place prizes at HackMX 6th edition" },
+    ],
+    videos: [
+      { kind: "file", title: "HackMX VI recap, including the winning teams", src: "/projects/identifeye/recap.mp4", poster: "/projects/identifeye/recap-poster.webp", credit: "Video by El Puerto de Liverpool" },
+    ],
     links: {
       // TODO(Alfonso): repo URL
     },
@@ -56,6 +63,12 @@ export const projects: Project[] = [
     stack: ["Python", "Gemini Vision", "Computer vision", "Web dashboard"],
     results: ["Community Impact Award at the ThinkCity 2026 Smart City Hackathon, representing Bellevue College."],
     awardId: "thinkcity-2026",
+    images: [
+      { src: "/projects/skysar/cover.webp", alt: "SkySAR title slide: AI swarm drone search and rescue" },
+      { src: "/projects/skysar/1.webp", alt: "SkySAR mission panel detecting three people on a forest trail, with a confidence and urgency log" },
+      { src: "/projects/skysar/2.webp", alt: "SkySAR business model and a comparison with traditional search and rescue" },
+      { src: "/projects/skysar/3.webp", alt: "The SkySAR team celebrating the Community Impact Award at ThinkCity 2026" },
+    ],
     links: {},
   },
   {
@@ -81,6 +94,10 @@ export const projects: Project[] = [
       "First response to missed calls went from hours to under 30 seconds.",
       "Eliminated malformed responses and duplicate outreach in the conversation pipeline.",
     ],
+    images: [
+      { src: "/projects/answr/cover.webp", alt: "Answr landing page: “Stop losing customers to missed calls”, next to a sample SMS conversation" },
+      { src: "/projects/answr/1.webp", alt: "Answr interactive demo: a missed call becomes an SMS conversation, a booked appointment and a lead in the pipeline" },
+    ],
     links: { site: "https://answr.info" },
   },
   {
@@ -105,6 +122,11 @@ export const projects: Project[] = [
     stack: ["Python", "scikit-learn", "NLTK", "Pandas", "NumPy", "Matplotlib", "Seaborn", "Streamlit"],
     results: ["Presented at Making Learning Visible, Bellevue College's college-wide showcase (Dec 2025)."],
     awardId: "mlv-2025",
+    images: [
+      { src: "/projects/can-ai-spot-a-lie/cover.webp", alt: "Can AI Spot a Lie? home page: the algorithm vs. the clickbait crisis", position: "top" },
+      { src: "/projects/can-ai-spot-a-lie/1.webp", alt: "Top words that predict fake and real news, and a test article classified as fake" },
+      { src: "/projects/can-ai-spot-a-lie/2.webp", alt: "The “Can AI Spot a Lie?” poster and live demo at Making Learning Visible, Bellevue College" },
+    ],
     links: {
       // TODO(Alfonso): repo URL
     },
@@ -154,6 +176,11 @@ export const projects: Project[] = [
     stack: ["OpenAI API", "LangChain", "Hugging Face", "TruLens", "Streamlit"],
     results: ["1st place at Atrato's Financial Hackathon, 1st Edition."],
     awardId: "atrato-2024",
+    images: [
+      { src: "/projects/financeai/cover.webp", alt: "FinancialAI title slide by team Silly Ducks for the Atrato Financial Hackathon" },
+      { src: "/projects/financeai/1.webp", alt: "FinanceAI answering a question about personal loans from an uploaded document, with live API cost metrics" },
+      { src: "/projects/financeai/2.webp", alt: "Announcement of team Silly Ducks as the hackathon winners" },
+    ],
     links: {},
   },
   {
@@ -174,7 +201,12 @@ export const projects: Project[] = [
       "An MNIST digit classifier in TensorFlow/Keras with training progress and sample predictions.",
       "A recommender system using user and movie embeddings in a neural network (collaborative filtering).",
     ],
+    results: ["The MNIST classifier reached 97.33% test accuracy after 10 epochs."],
     stack: ["Python", "NumPy", "Pandas", "TensorFlow/Keras", "scikit-learn", "Matplotlib", "Streamlit"],
+    images: [
+      { src: "/projects/ml-playground/cover.webp", alt: "MNIST classifier evaluation: test accuracy, loss and accuracy curves, and sample predictions", position: "top" },
+      { src: "/projects/ml-playground/1.webp", alt: "Recommender module: MovieLens-style ratings and the top recommended movies for a user" },
+    ],
     links: {},
   },
   {
@@ -227,6 +259,12 @@ export const projects: Project[] = [
       "A catalog in typed data files and a short, search-focused landing page for Google review cards.",
     ],
     stack: ["Next.js", "TypeScript", "Tailwind CSS", "React", "Vercel"],
+    images: [
+      { src: "/projects/zaptap/cover.webp", alt: "ZapTap landing page: “Your happy customers meant to leave you a review.”" },
+    ],
+    videos: [
+      { kind: "file", title: "Tapping a phone on a ZapTap card opens the Google review page", src: "/projects/zaptap/demo.mp4", poster: "/projects/zaptap/demo-poster.webp", loop: true },
+    ],
     links: { site: "https://zaptap.shop" },
   },
   {
@@ -246,6 +284,10 @@ export const projects: Project[] = [
       "Secure payments with Stripe and user authentication with role management.",
     ],
     stack: ["C#", "ASP.NET Core MVC", "SQL Server", "Stripe"],
+    images: [
+      { src: "/projects/samla/cover.webp", alt: "SAMLA financial dashboard with income, costs, balance, cost categories and transactions" },
+      { src: "/projects/samla/1.webp", alt: "SAMLA sign-in page" },
+    ],
     links: {},
   },
   {
@@ -266,6 +308,15 @@ export const projects: Project[] = [
       "JWT auth with password encryption, CI/CD with GitHub Actions and unit tests with MSTest.",
     ],
     stack: ["Unity", "C#", "Node.js", "AWS Lambda", "API Gateway", "MySQL", "AWS RDS", "S3", "GitHub Actions", "OpenAI API"],
+    images: [
+      { src: "/projects/blockcity/cover.webp", alt: "BlockCity Module 1: a pixel-art city map with levels and stars" },
+      { src: "/projects/blockcity/1.webp", alt: "Module selection screen with locked and unlocked cities" },
+      { src: "/projects/blockcity/2.webp", alt: "Admin dashboard with registered users, users per nationality and progress per module" },
+      { src: "/projects/blockcity/3.webp", alt: "The OpenAI-powered assistant suggesting user-retention strategies by country" },
+    ],
+    videos: [
+      { kind: "youtube", title: "BlockCity demo", youtubeId: "BZy_tlWKUmU" },
+    ],
     links: { video: "https://youtu.be/BZy_tlWKUmU" },
   },
   {
@@ -285,6 +336,13 @@ export const projects: Project[] = [
       "A PHP API and MySQL database, plus a Streamlit dashboard with historical graphs and configurable alerts.",
     ],
     stack: ["ESP32", "C++", "PHP", "MySQL", "Python", "Streamlit", "Onshape"],
+    images: [
+      { src: "/projects/ambient-detectors/cover.webp", alt: "Ambient-Detectors Streamlit app: welcome screen, live station status and historical datasets" },
+      { src: "/projects/ambient-detectors/1.webp", alt: "Architecture: DHT11, MQ135 and BH1750 sensors feed an ESP32 that posts to a PHP API and SQL database, visualized in Streamlit" },
+    ],
+    videos: [
+      { kind: "youtube", title: "Ambient-Detectors demo", youtubeId: "H2oz0zqGWlA" },
+    ],
     links: { video: "https://youtu.be/H2oz0zqGWlA" },
   },
 ];
