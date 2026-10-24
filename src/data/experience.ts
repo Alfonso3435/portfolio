@@ -39,6 +39,21 @@ export const experience: Experience[] = [
     projectSlug: "zaptap",
   },
   {
+    id: "fitness-tech",
+    company: "Fitness Tech",
+    role: "Software & AI Team Member (AI/ML)",
+    // TODO(Alfonso): club website or LinkedIn page
+    location: "Seattle, WA",
+    dates: { start: "2026-10" },
+    summary:
+      "Student-led Engineering Student Organization at UW (40+ members, 6 projects) that builds wearable technology to streamline athletic training metrics. Faculty advisor: Prof. Sep Makhsous (ECE).",
+    highlights: [
+      "Joined the Software & AI team on the AI/ML track.",
+      "Working across the full stack of MyFitnessTech, the club's Flutter app on iOS and Android that brings workouts, nutrition, sleep, hydration and biometrics into one profile with an AI coaching layer.",
+    ],
+    stack: ["Flutter"],
+  },
+  {
     id: "samla",
     company: "SAMLA",
     role: "Software Engineer",
