@@ -5,7 +5,8 @@ data/
 __pycache__/
 .venv/
 
-# Model checkpoints (large, produced by training)
+# Trained artifacts (tokenizer, checkpoints) — reproducible from the scripts
+artifacts/
 checkpoints/
 *.pt
 *.onnx
