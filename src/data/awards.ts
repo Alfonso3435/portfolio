@@ -11,7 +11,7 @@ export const awards: Award[] = [
     year: 2026,
     projectSlug: "skysar",
     summary:
-      "Awarded for SkySAR, an AI-powered drone-swarm concept for search and rescue, built by an interdisciplinary, international team.",
+      "Won the Community Impact Award with SkySAR, an AI-powered drone-swarm concept for search and rescue, built by an interdisciplinary, international team.",
   },
   {
     id: "mlv-2025",

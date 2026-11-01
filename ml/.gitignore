@@ -1,0 +1,11 @@
+# Generated from src/data — rebuild with `npm run export:knowledge` + `python ml/build_dataset.py`
+data/
+
+# Python
+__pycache__/
+.venv/
+
+# Model checkpoints (large, produced by training)
+checkpoints/
+*.pt
+*.onnx

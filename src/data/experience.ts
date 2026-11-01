@@ -28,7 +28,7 @@ export const experience: Experience[] = [
     url: "https://zaptap.shop",
     dates: { start: "2026-08" },
     summary:
-      "Custom NFC review cards and tabletop displays that let local businesses collect Google reviews with one tap.",
+      "Business selling custom NFC review cards and tabletop displays that let local businesses collect Google reviews with one tap.",
     short: "NFC review cards",
     highlights: [
       "Built the full e-commerce site in Next.js 16 (App Router), TypeScript and Tailwind CSS v4, deployed on Vercel.",
