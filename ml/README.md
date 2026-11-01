@@ -24,7 +24,7 @@ only need a data edit, not retraining.
 |---|---|---|
 | 1 | Dataset: chunks, corpus, Q&A with train/dev/test splits | ✅ |
 | 2 | BPE tokenizer from scratch | ✅ |
-| 3 | Decoder-only transformer from scratch | |
+| 3 | Decoder-only transformer from scratch | ✅ |
 | 4 | Training: pretrain for fluency, fine-tune on Q&A | |
 | 5 | Retrieval (TF-IDF) + confidence fallback | |
 | 6 | Evaluation: accuracy, hallucination rate, refusals | |
@@ -79,4 +79,27 @@ in `askalfonso/tokenizer.py`:
 On the dev set, BPE averages ~4.5 characters per token: sequences are ~4.5×
 shorter than character-level, and since attention cost grows with the square of
 the sequence length, that's ~20× less attention compute per example.
+
+## Phase 3 — the transformer
+
+```bash
+python -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt   # Windows: ml\.venv\Scripts\pip
+python ml/inspect_model.py                         # sanity checks, ~1 min on CPU
+python -m unittest discover -s ml/tests -t ml      # 25 tests
+```
+
+`askalfonso/model.py` is a GPT-style decoder-only transformer (~3.9M parameters
+with the default config: 4 layers, 4 heads, 256-dim embeddings, 768-token window):
+
+- **Embeddings** — a learned vector per token (*what*) plus one per position (*where*).
+- **Causal multi-head self-attention** — `softmax(QKᵀ/√d + mask)·V`, implemented
+  by hand. The mask hides future tokens, so the model can't peek at what it must predict.
+- **MLP** — a 2-layer network (4× expansion, GELU) applied to each token.
+- **Pre-norm residual blocks** — `x + Attn(LN(x))`, `x + MLP(LN(x))`, for stable training.
+- **Weight tying** — the input embedding and the output layer share one matrix.
+- **Answer-only loss** (`askalfonso/data.py`) — the context and question are read
+  but not graded; only the answer tokens count.
+
+`inspect_model.py` verifies the model before any real training: initial loss ≈
+ln(vocab), the causal mask leaks nothing, and it can overfit a tiny batch.
 

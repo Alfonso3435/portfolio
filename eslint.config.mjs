@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Python ML code and its virtual environment (which ships .js files of its own).
+    "ml/**",
   ]),
 ]);
 
