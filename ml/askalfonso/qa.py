@@ -511,7 +511,9 @@ class QAGenerator:
             lambda v: f"His {v['group']['name']} skills include {join_list([s['name'] for s in v['group']['skills'][:8]])}.",
             lambda v: [skill_chunk_id(v["group"])],
         )
-        langs = next(g for g in kb.skill_groups if g["name"] == "Languages")
+        langs = next((g for g in kb.skill_groups if g["name"] == "Languages"), None)
+        if langs is None:  # e.g. synthetic knowledge bases, which only have projects
+            return
         self.templated(
             "skill.programming_languages", "skill",
             ["What programming languages does he know?", "What languages does he code in?",

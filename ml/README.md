@@ -25,7 +25,7 @@ only need a data edit, not retraining.
 | 1 | Dataset: chunks, corpus, Q&A with train/dev/test splits | ✅ |
 | 2 | BPE tokenizer from scratch | ✅ |
 | 3 | Decoder-only transformer from scratch | ✅ |
-| 4 | Training: pretrain for fluency, fine-tune on Q&A | |
+| 4 | Training: fine-tune on Q&A + synthetic reading practice | ✅ |
 | 5 | Retrieval (TF-IDF) + confidence fallback | |
 | 6 | Evaluation: accuracy, hallucination rate, refusals | |
 | 7 | Deployment on the site | |
@@ -102,4 +102,33 @@ with the default config: 4 layers, 4 heads, 256-dim embeddings, 768-token window
 
 `inspect_model.py` verifies the model before any real training: initial loss ≈
 ln(vocab), the causal mask leaks nothing, and it can overfit a tiny batch.
+
+## Phase 4 — training
+
+Recommended: open `ml/notebooks/train_colab.ipynb` in Google Colab with a T4 GPU
+and run all cells. It clones this repo, rebuilds Phases 1–2 and trains.
+
+Locally (any machine; a CUDA GPU makes it ~20× faster than CPU):
+
+```bash
+python ml/train.py                                  # → ml/checkpoints/<run>/best.pt
+python ml/train.py --epochs 2 --eval-samples 20     # quick smoke test
+```
+
+What makes it work:
+
+- **Synthetic reading practice** (`askalfonso/synthetic.py`). Every epoch adds Q&A
+  about freshly invented projects (random names, stacks and roles). They can't be
+  memorized, so the model must learn to *read* the context — which is what lets new
+  projects work later without retraining. Only train-split templates are used, and
+  dev/test "unknown" technologies are never placed in a fake stack (no leakage).
+- **Realistic contexts** (`askalfonso/training_data.py`). Fact questions get their
+  gold chunk(s) plus, half the time, an irrelevant distractor; refusals get only
+  irrelevant chunks or none. Resampled every epoch.
+- **Recipe.** AdamW (decay on weight matrices only), linear warmup + cosine decay,
+  gradient clipping, dropout, answer-only loss, early stopping on dev exact match.
+- **Optional stage A.** `--pretrain-text … --pretrain-steps …` runs plain
+  next-token pretraining on general English first (the notebook can fetch WikiText-2).
+
+The test split is never used during training; it's reserved for Phase 6.
 

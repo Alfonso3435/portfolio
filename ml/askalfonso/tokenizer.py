@@ -193,23 +193,28 @@ class BPETokenizer:
 
     # ── persistence ──────────────────────────────────────────────────────────
 
-    def save(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        data = {
+    def to_dict(self) -> dict:
+        return {
             "type": "byte-level-bpe",
             "version": 1,
             "pattern": SPLIT_PATTERN,
             "merges": [list(p) for p in self.merges],
             "special_tokens": list(self.special_tokens),
         }
-        path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "BPETokenizer":
+        if data.get("type") != "byte-level-bpe" or data.get("pattern") != SPLIT_PATTERN:
+            raise ValueError("Tokenizer data was saved by an incompatible tokenizer version.")
+        return cls([tuple(p) for p in data["merges"]], data["special_tokens"])
+
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict()) + "\n", encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> "BPETokenizer":
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("type") != "byte-level-bpe" or data.get("pattern") != SPLIT_PATTERN:
-            raise ValueError(f"{path} was saved by an incompatible tokenizer version.")
-        return cls([tuple(p) for p in data["merges"]], data["special_tokens"])
+        return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
 class CharTokenizer:
