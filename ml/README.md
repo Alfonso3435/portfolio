@@ -26,7 +26,7 @@ only need a data edit, not retraining.
 | 2 | BPE tokenizer from scratch | ✅ |
 | 3 | Decoder-only transformer from scratch | ✅ |
 | 4 | Training: fine-tune on Q&A + synthetic reading practice | ✅ |
-| 5 | Retrieval (TF-IDF) + confidence fallback | |
+| 5 | Retrieval (TF-IDF) + confidence fallback + guardrails | ✅ |
 | 6 | Evaluation: accuracy, hallucination rate, refusals | |
 | 7 | Deployment on the site | |
 
@@ -85,7 +85,7 @@ the sequence length, that's ~20× less attention compute per example.
 ```bash
 python -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt   # Windows: ml\.venv\Scripts\pip
 python ml/inspect_model.py                         # sanity checks, ~1 min on CPU
-python -m unittest discover -s ml/tests -t ml      # 25 tests
+python -m unittest discover -s ml/tests -t ml      # all tests
 ```
 
 `askalfonso/model.py` is a GPT-style decoder-only transformer (~3.9M parameters
@@ -161,3 +161,70 @@ dev/test. v2 fixes all three; dev/test questions are unchanged so the runs compa
 These are exactly what Phase 5's guardrails target: retrieval confidence, and a
 grounding check that rejects answers naming things absent from the context and question.
 
+
+## Phase 5 — retrieval + guardrails
+
+```bash
+python ml/eval_pipeline.py --retrieval-only                          # retrieval metrics, no model needed
+python ml/eval_pipeline.py --checkpoint ml/checkpoints/<run>/best.pt # full pipeline on dev + τ sweep
+python ml/ask.py --checkpoint ml/checkpoints/<run>/best.pt --debug   # chat, and see every decision
+```
+
+`askalfonso/pipeline.py` wires everything together:
+
+```
+question ─▶ private guard ─▶ TF-IDF top-3 ─▶ keep chunks ≥ τ ─▶ transformer ─▶ output checks ─▶ reply
+               │ (personal)                      │ (none ≥ τ: empty context)      │ (failed)
+               ▼                                 ▼                                ▼
+         private refusal                 model must refuse              "I'm not sure — reach him at …"
+```
+
+- **Retriever** (`askalfonso/retrieval.py`) — TF-IDF from scratch: sublinear tf, smoothed idf,
+  L2-normalized vectors, cosine similarity, unigrams + bigrams, a small synonym table
+  ("UW" → University of Washington). An **entity bonus** (+0.5) goes to every chunk whose
+  name — a project, company, school, award *or technology* — appears in the question.
+- **Confidence threshold τ = 0.10.** Below it the model gets no context and should refuse.
+- **Guardrails** (`askalfonso/guardrails.py`, pure Python so they can be ported to TypeScript):
+  personal questions are refused before the model runs; answers must finish (`<|end|>`),
+  not repeat themselves, and without context only a refusal is accepted. The key check is
+  **grounding**: every name and number in a factual answer must appear in the retrieved
+  chunks; in a refusal, the name it refuses must come from the question. A "Yes, he has used
+  X" answer must name the X that was asked.
+
+### Results (dev, colab-v2 model)
+
+Retrieval on 211 answerable questions: **recall@1 89.1%, recall@2 100%, MRR 0.945**.
+The entity bonus did most of the work (recall@1 54% → 89%): plain TF-IDF ranked IdentifEye's
+own chunk 6th for "What need does IdentifEye address?", because skill chunks mention it more.
+
+| Setting | Answerable: correct | safe miss | wrong | Should refuse: refused | stated a "fact" |
+|---|---|---|---|---|---|
+| τ = 0.05 | 73.9% | 3.8% | 22.3% | 93.2% | 6.8% |
+| **τ = 0.10 (chosen)** | **73.9%** | 3.8% | 22.3% | **95.5%** | **4.5%** |
+| τ = 0.20 | 72.5% | 4.7% | 22.7% | 95.5% | 4.5% |
+| τ = 0.10, no guardrails | 74.4% | 1.9% | 23.7% | 75.0% | 25.0% |
+
+The guardrails cost 0.5 points of correct answers and cut wrong answers to "should refuse"
+questions from 25% to 4.5%. The remaining two are greetings ("What video games does he
+play?" → "Hi! I'm Ask Alfonso…"): off target, but harmless. Every factual answer that gets
+through is grounded in what the model read — no invented names or numbers.
+
+### Error analysis
+
+- **The 22% "wrong" are grounded answers to the wrong question type** — the v2 weakness from
+  Phase 4, not hallucinations: "Was ZapTap recognized anywhere?" → ZapTap's links; "Can you
+  explain SAMLA?" → its problem statement. The guardrails can't catch these (every word is in
+  the context). Fixing them is a model job: more varied training phrasings (v3).
+- **19 refusals named the wrong thing** ("Describe QuantumChess." → "…a project called
+  *Quirex*…"; "Does he know Redis?" → "…about *Riso.js*…"). The grounding check turns all of
+  them into the fallback: still an honest "I'm not sure".
+- **Lesson: the reader is brittle to the chunk format.** Adding two sentences (award and links)
+  to every project chunk dropped answerable accuracy from 74% to 44% with the same model —
+  a train/test distribution mismatch. So the chunk text stays exactly as trained, and the
+  award/link/case-study facts the model learned from answers are passed to the grounding check
+  only (`Knowledge.grounding_facts()`). Moving them into the chunks needs a retrain.
+- **Two data bugs found by the grounding check:** link answers and "did X win anything?"
+  answers had no gold chunk containing the URL or the award, so the model could only memorize
+  them. Grounding facts cover them for now; v3 should put them in the chunks.
+
+Latency on CPU is ~0.3–2.5 s per question (no KV cache yet) — a Phase 7 concern.

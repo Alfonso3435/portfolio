@@ -28,7 +28,7 @@ import random
 from dataclasses import asdict, dataclass
 from typing import Callable, Iterable
 
-from .knowledge import Knowledge, education_chunk_id, skill_chunk_id
+from .knowledge import LINK_LABELS, SITE, Knowledge, education_chunk_id, skill_chunk_id
 from .text import (
     as_he_sentence,
     degree_phrase,
@@ -42,8 +42,6 @@ from .text import (
     to_third_person,
     with_article,
 )
-
-SITE = "alfonsovegasol.com"
 
 
 @dataclass
@@ -410,11 +408,9 @@ class QAGenerator:
             lambda v: gold(v) + ([f"award/{v['p']['awardId']}"] if v["p"].get("awardId") else []),
         )
 
-        labels = {"site": "Live site", "demo": "Live demo", "repo": "Source code", "video": "Demo video"}
-
         def links(v: dict) -> str:
             p = v["p"]
-            parts = [f"{labels[k]}: {url}" for k, url in p["links"].items() if url]
+            parts = [f"{LINK_LABELS[k]}: {url}" for k, url in p["links"].items() if url]
             case = f"The full case study is at {SITE}/projects/{p['slug']}."
             return (". ".join(parts) + ". " + case) if parts else f"There's no public link for {p['title']} yet. {case}"
 

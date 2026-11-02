@@ -35,15 +35,28 @@ def normalize(text: str) -> str:
 
 
 @torch.no_grad()
-def answer(model: GPT, tok: BPETokenizer, context: str, question: str, max_new_tokens: int = 120) -> str:
-    """Greedy decoding (temperature 0): for a factual assistant, the most likely answer, every time."""
+def generate_answer(
+    model: GPT, tok: BPETokenizer, context: str, question: str, max_new_tokens: int = 120
+) -> tuple[str, bool]:
+    """Greedy decoding (temperature 0): for a factual assistant, the most likely answer, every time.
+
+    Returns (answer, finished). finished=False means the model never wrote <|end|>
+    within max_new_tokens — usually a sign it's rambling, which the guardrails reject.
+    """
     device = next(model.parameters()).device
+    end_id = tok.token_id(END)
     prompt_ids = tok.encode(build_prompt(context, question))
     # Leave room for the answer inside the context window.
     prompt_ids = prompt_ids[-(model.cfg.block_size - max_new_tokens):]
     x = torch.tensor([prompt_ids], device=device)
-    out = model.generate(x, max_new_tokens=max_new_tokens, temperature=0, stop_token=tok.token_id(END))
-    return tok.decode(out[0, len(prompt_ids):].tolist()).split(END)[0].strip()
+    out = model.generate(x, max_new_tokens=max_new_tokens, temperature=0, stop_token=end_id)
+    new_ids = out[0, len(prompt_ids):].tolist()
+    finished = end_id in new_ids
+    return tok.decode(new_ids).split(END)[0].strip(), finished
+
+
+def answer(model: GPT, tok: BPETokenizer, context: str, question: str, max_new_tokens: int = 120) -> str:
+    return generate_answer(model, tok, context, question, max_new_tokens)[0]
 
 
 def save_checkpoint(path: Path, model: GPT, tok: BPETokenizer, meta: dict) -> None:

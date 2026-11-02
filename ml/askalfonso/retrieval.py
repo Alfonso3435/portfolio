@@ -1,0 +1,150 @@
+"""TF-IDF retriever, written from scratch: finds the chunks most relevant to a question.
+
+The same idea you used with scikit-learn in "Can AI Spot a Lie?", now by hand —
+and small enough to port to TypeScript so it can run in the browser (Phase 7).
+
+    tf(t, d)   = 1 + log(count of term t in chunk d)        (sublinear: the 10th
+                                                             "python" adds less than the 1st)
+    idf(t)     = log((1 + N) / (1 + df(t))) + 1             (rare terms weigh more;
+                                                             N chunks, df = chunks containing t)
+    vector(d)  = tf · idf for every term, then L2-normalized
+    score(q,d) = cosine similarity = vector(q) · vector(d)  (0 = nothing in common, 1 = identical)
+
+Terms are words and word pairs (bigrams), like your fake-news classifier, so
+"machine learning" counts as a phrase and not just two common words.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+import unicodedata
+from collections import Counter
+from dataclasses import dataclass
+
+# Words that appear in almost every question and say nothing about *which* chunk is relevant.
+STOPWORDS = set("""
+a an the and or but of to in on at for with by from about as is are was were be been being am do does did
+doing have has had having he his him himself she her it its they them their what which who whom whose when
+where why how this that these those there here i me my you your we our can could would should will shall
+may might must any some all also just so than then too very not no yes if into out up down over under
+again more most such only own same other tell know let give show please much many anything something
+alfonso alfonsos poncho juan vega sol
+use used uses using familiar ever good work worked working experience
+""".split())
+
+# Small query expansion: how visitors say it → how the data says it.
+SYNONYMS = {
+    "uw": "university washington",
+    "tec": "tecnologico monterrey",
+    "itesm": "tecnologico monterrey",
+    "gpa": "gpa grades",
+    "ml": "machine learning",
+    "ai": "ai artificial intelligence",
+    "llm": "llm language model",
+    "llms": "llm language model",
+    "school": "university college",
+    "college": "university college",
+    "job": "role looking internship",
+    "internship": "internship looking role",
+    "hire": "looking internship role",
+    "email": "email contact reach",
+    "contact": "email contact reach",
+    "award": "award place won",
+    "awards": "award place won",
+    "won": "award place won",
+    "hackathon": "hackathon award",
+    "recognition": "award recognition",
+    "achievements": "award achievements",
+    "city": "location based area",
+    "located": "location based area",
+    "based": "location based area",
+    "live": "location based area",
+    "graduate": "graduation expected",
+    "graduation": "graduation expected",
+    "bilingual": "speaks languages spanish english",
+    "speak": "speaks languages",
+    "coursera": "certifications courses",
+    "certificates": "certifications courses",
+    "certificate": "certifications courses",
+    "courses": "certifications courses",
+    "touch": "contact reach email",
+    "reach": "contact reach email",
+}
+
+TOKEN_RE = re.compile(r"[a-z0-9]+(?:[+#]+|(?:\.[a-z0-9]+)+)?")
+
+
+def fold(text: str) -> str:
+    """Lowercase and strip accents: 'Tecnológico' -> 'tecnologico'."""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return text.lower()
+
+
+def words(text: str) -> list[str]:
+    """'Does he know C++ and Next.js?' -> ['c++', 'next.js'] (stopwords removed)."""
+    return [w for w in TOKEN_RE.findall(fold(text)) if w not in STOPWORDS]
+
+
+def terms(text: str, expand: bool = False) -> list[str]:
+    """Words plus adjacent word pairs: ['machine', 'learning', 'machine learning']."""
+    ws = words(text)
+    if expand:
+        ws = [x for w in ws for x in ([w] + words(SYNONYMS[w]) if w in SYNONYMS else [w])]
+    return ws + [f"{a} {b}" for a, b in zip(ws, ws[1:])]
+
+
+@dataclass
+class Hit:
+    chunk_id: str
+    title: str
+    score: float
+
+
+class TfidfRetriever:
+    def __init__(self, chunks: list[dict], title_weight: int = 2, entity_bonus: float = 0.5):
+        """chunks: [{"id", "title", "text", "entities"}]. Titles are repeated to count more.
+
+        Entity bonus: TF-IDF alone ranked IdentifEye's own chunk 6th for "What need does
+        IdentifEye address?", because the skill chunks mention "IdentifEye" many times.
+        If a chunk's entity name (all of its words) appears in the question, it gets
+        +entity_bonus — the question is clearly *about* that thing.
+        """
+        self.chunks = chunks
+        self.entity_bonus = entity_bonus
+        self.entity_words = [[set(words(e)) for e in c.get("entities", []) if words(e)] for c in chunks]
+        docs = [terms(" ".join([c["title"]] * title_weight + [c["text"]])) for c in chunks]
+        n = len(docs)
+        df = Counter(t for doc in docs for t in set(doc))
+        self.idf = {t: math.log((1 + n) / (1 + d)) + 1 for t, d in df.items()}
+        self.vectors = [self._vectorize(Counter(doc)) for doc in docs]
+
+    def _vectorize(self, counts: Counter) -> dict[str, float]:
+        vec = {t: (1 + math.log(c)) * self.idf[t] for t, c in counts.items() if t in self.idf}
+        norm = math.sqrt(sum(v * v for v in vec.values())) or 1.0
+        return {t: v / norm for t, v in vec.items()}
+
+    def search(self, question: str, k: int = 3) -> list[Hit]:
+        q = self._vectorize(Counter(terms(question, expand=True)))
+        q_words = set(words(question))
+        scored = []
+        for chunk, vec, entities in zip(self.chunks, self.vectors, self.entity_words):
+            # Iterate over the (short) query, not the (long) chunk.
+            score = sum(w * vec.get(t, 0.0) for t, w in q.items())
+            if any(e <= q_words for e in entities):
+                score += self.entity_bonus
+            scored.append(Hit(chunk["id"], chunk["title"], score))
+        scored.sort(key=lambda h: h.score, reverse=True)
+        return scored[:k]
+
+    def to_dict(self) -> dict:
+        """Everything the browser needs to run search without Python (Phase 7)."""
+        return {
+            "entity_bonus": self.entity_bonus,
+            "idf": self.idf,
+            "chunks": [
+                {"id": c["id"], "title": c["title"], "text": c["text"], "vector": v,
+                 "entities": [sorted(e) for e in ents]}
+                for c, v, ents in zip(self.chunks, self.vectors, self.entity_words)
+            ],
+        }

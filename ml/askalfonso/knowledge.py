@@ -9,7 +9,8 @@ the chunk(s) that contain its answer — its `gold_chunks`.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .text import (
@@ -33,6 +34,9 @@ class Chunk:
     title: str
     text: str
     source: str  # which data file it came from, for debugging and the Lab page
+    # Names a visitor would type to mean this chunk ("IdentifEye", "Answr", "HackMX").
+    # The retriever boosts a chunk whose entity name appears in the question.
+    entities: list[str] = field(default_factory=list)
 
 
 class Knowledge:
@@ -56,6 +60,7 @@ class Knowledge:
         self.project_by_slug = {p["slug"]: p for p in self.projects}
         self.award_by_id = {a["id"]: a for a in self.awards}
         self.tech_sources = self._build_tech_sources()
+        self.chunk_techs = self._build_chunk_techs()
 
     @classmethod
     def load(cls, path: Path) -> "Knowledge":
@@ -89,6 +94,47 @@ class Knowledge:
                 add(tech, (job["company"], f"experience/{job['id']}"))
         return sources
 
+    def _build_chunk_techs(self) -> dict[str, list[str]]:
+        """chunk id -> technology names (with aliases) it mentions, so "Does he know Keras?"
+        boosts every chunk that can answer it, like a project name does."""
+        techs: dict[str, list[str]] = {}
+
+        def add(chunk_id: str, tech: str) -> None:
+            bucket = techs.setdefault(chunk_id, [])
+            bucket += [a for a in tech_aliases(tech) if a not in bucket]
+
+        for group in self.skill_groups:
+            for skill in group["skills"]:
+                add(skill_chunk_id(group), skill["name"])
+                for slug in skill["projectSlugs"]:
+                    add(f"project/{slug}", skill["name"])
+        for project in self.projects:
+            for tech in project["stack"]:
+                add(f"project/{project['slug']}", tech)
+        for job in self.experience:
+            for tech in job["stack"]:
+                add(f"experience/{job['id']}", tech)
+        return techs
+
+    def grounding_facts(self) -> dict[str, str]:
+        """chunk id -> facts the model may state about that chunk's project that the chunk
+        text itself doesn't spell out (its award, links and case-study URL).
+
+        The model learned these from the Q&A answers, not from the chunks, so the
+        guardrails need them to recognize a correct link or award as grounded. They are
+        *not* added to the chunk text: the model was trained on the current format, and
+        changing it without retraining hurts accuracy badly (see ml/README.md, Phase 5).
+        """
+        facts = {}
+        for proj in self.projects:
+            parts = [f"{SITE}/projects/{proj['slug']}"]
+            parts += [f"{LINK_LABELS[k]}: {url}" for k, url in proj.get("links", {}).items() if url and k in LINK_LABELS]
+            award = self.award_for(proj)
+            if award:
+                parts.append(f"{award['placement']} at {award['event']} ({award['year']})")
+            facts[f"project/{proj['slug']}"] = " ".join(parts)
+        return facts
+
     def skill_group_chunk(self, tech: str) -> str | None:
         for group in self.skill_groups:
             if any(s["name"] == tech for s in group["skills"]):
@@ -110,7 +156,7 @@ class Knowledge:
     # ── chunks ──────────────────────────────────────────────────────────────
 
     def chunks(self) -> list[Chunk]:
-        return [
+        chunks = [
             *self._profile_chunks(),
             *self._education_chunks(),
             *self._experience_chunks(),
@@ -119,6 +165,9 @@ class Knowledge:
             *self._skill_chunks(),
             self._certifications_chunk(),
         ]
+        for chunk in chunks:
+            chunk.entities += [t for t in self.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
+        return chunks
 
     def _profile_chunks(self) -> list[Chunk]:
         p = self.profile
@@ -135,7 +184,7 @@ class Knowledge:
             [f"{l['language']} ({l['level'].lower()})" for l in p["spokenLanguages"]]
         ) + "."
         return [
-            Chunk("profile/about", "About Alfonso", about, "profile.ts"),
+            Chunk("profile/about", "About Alfonso", about, "profile.ts", ["background", "bio", "biography"]),
             Chunk("profile/looking-for", "What Alfonso is looking for and how to contact him", looking, "profile.ts"),
             Chunk("profile/languages", "Spoken languages", langs, "profile.ts"),
         ]
@@ -152,7 +201,9 @@ class Knowledge:
                 parts.append(f"GPA: {edu['gpa']}.")
             parts.append(f"Relevant coursework: {join_list(edu['coursework'])}.")
             parts += [ensure_period(n) for n in edu.get("notes", [])]
-            chunks.append(Chunk(education_chunk_id(edu), edu["school"], " ".join(parts), "profile.ts"))
+            name = edu["school"].split(" — ")[0]
+            chunks.append(Chunk(education_chunk_id(edu), edu["school"], " ".join(parts), "profile.ts",
+                                [name, *SCHOOL_ALIASES.get(name, []), "education", "academic"]))
         return chunks
 
     def _experience_chunks(self) -> list[Chunk]:
@@ -164,7 +215,8 @@ class Knowledge:
                 + " ".join(ensure_period(as_he_sentence(h)) for h in job["highlights"])
                 + f" Stack: {join_list(job['stack'])}."
             )
-            chunks.append(Chunk(f"experience/{job['id']}", f"{job['role']} at {job['company']}", text, "experience.ts"))
+            chunks.append(Chunk(f"experience/{job['id']}", f"{job['role']} at {job['company']}", text, "experience.ts",
+                                [job["company"]]))
         return chunks
 
     def _project_chunks(self) -> list[Chunk]:
@@ -183,7 +235,10 @@ class Knowledge:
                 parts.append(f"Year: {proj['year']}.")
             if proj["status"] == "in-progress":
                 parts.append("Status: in progress.")
-            chunks.append(Chunk(f"project/{proj['slug']}", proj["title"], " ".join(parts), "projects.ts"))
+            # "Answr AI Agent" is also reachable as "Answr"; "PDF Chatbot (RAG)" as "PDF Chatbot".
+            names = [proj["title"], proj["title"].split(" (")[0]]
+            chunks.append(Chunk(f"project/{proj['slug']}", proj["title"], " ".join(parts), "projects.ts",
+                                list(dict.fromkeys(names))))
         return chunks
 
     def _award_chunks(self) -> list[Chunk]:
@@ -194,6 +249,7 @@ class Knowledge:
                 f"{a['placement']} — {a['title']}, at {a['event']} ({a['year']}), organized by {a['organizer']}. "
                 f"{as_he_sentence(to_third_person(a['summary']))}",
                 "awards.ts",
+                award_aliases(a["event"]),
             )
             for a in self.awards
         ]
@@ -217,6 +273,40 @@ class Knowledge:
             lines.append(f"{c['title']} ({c['issuer']}{when}{score})")
         text = "Alfonso's certifications and courses: " + "; ".join(lines) + "."
         return Chunk("certifications", "Certifications and courses", text, "certifications.ts")
+
+
+def tech_aliases(name: str) -> list[str]:
+    """How a visitor might type a skill: 'TensorFlow / Keras' -> TensorFlow, Keras;
+    'Google Cloud (Vertex AI, Cloud Run)' -> Google Cloud, Vertex AI, Cloud Run;
+    'n8n & webhooks' -> n8n, webhooks."""
+    out = [name]
+    head, _, inner = name.partition(" (")
+    parts = [head] + [x.strip() for x in inner.rstrip(")").split(",") if x.strip()]
+    for part in parts:
+        for piece in re.split(r" / | & ", part):
+            out.append(piece.strip())
+    return list(dict.fromkeys(p for p in out if p))
+
+
+SITE = "alfonsovegasol.com"
+LINK_LABELS = {"site": "Live site", "demo": "Live demo", "repo": "Source code", "video": "Demo video"}
+
+
+# How visitors actually refer to schools.
+SCHOOL_ALIASES = {
+    "University of Washington": ["UW", "Allen School"],
+    "Tecnológico de Monterrey": ["Tec de Monterrey", "Tec", "ITESM"],
+}
+
+
+def award_aliases(event: str) -> list[str]:
+    """'HackMX 6th Edition' -> ['HackMX 6th Edition', 'HackMX']; skips generic first words like 'Making'."""
+    full = event.split(",")[0].split(" (")[0]
+    first = full.split(" ")[0]
+    names = [full]
+    if first != full and first.lower() not in {"making", "the", "annual", "international"}:
+        names.append(first)
+    return names
 
 
 def education_chunk_id(edu: dict) -> str:
