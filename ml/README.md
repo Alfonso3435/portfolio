@@ -113,7 +113,13 @@ Locally (any machine; a CUDA GPU makes it ~20× faster than CPU):
 ```bash
 python ml/train.py                                  # → ml/checkpoints/<run>/best.pt
 python ml/train.py --epochs 2 --eval-samples 20     # quick smoke test
+python ml/train.py --run my-run --resume            # continue an interrupted run from its last.pt
 ```
+
+`last.pt` is saved after every epoch (weights, optimizer state, epoch, best score, RNG
+states), so an interrupted run continues where it stopped. The Colab notebook saves runs
+to Google Drive (`--checkpoints`), so a disconnected runtime loses at most one epoch:
+reconnect and `Run all`.
 
 What makes it work:
 

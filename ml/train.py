@@ -21,8 +21,13 @@ Since v3, training and dev contexts come from the TF-IDF retriever, as in the pi
 
 The test split is never touched here. It's reserved for the final evaluation (Phase 6).
 
-Outputs (ml/checkpoints/<run>/):
+Resuming: with --resume, training continues from <run>/last.pt (saved after every
+epoch) instead of starting over. On Colab, point --checkpoints at Google Drive so a
+disconnected runtime loses at most one epoch.
+
+Outputs (ml/checkpoints/<run>/, or --checkpoints/<run>/):
     best.pt        model + config + tokenizer + metadata, at the best dev score
+    last.pt        everything needed to resume: weights, optimizer, epoch, best score, RNG states
     metrics.jsonl  one line per log/eval step, for the loss curves on the Lab page
     samples.txt    dev questions with the model's answers, for error analysis
 """
@@ -85,6 +90,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--patience", type=int, default=6, help="exact-match evaluations without improvement before stopping")
     # misc
     p.add_argument("--run", default=datetime.now().strftime("%Y%m%d-%H%M"))
+    p.add_argument("--checkpoints", type=Path, default=ML_DIR / "checkpoints", help="where run folders are written")
+    p.add_argument("--resume", action="store_true", help="continue from <run>/last.pt if it exists")
     p.add_argument("--device", default="auto")
     p.add_argument("--seed", type=int, default=1337)
     return p.parse_args()
@@ -180,9 +187,12 @@ def main() -> int:
 
     set_seed(args.seed)
     device = pick_device(args.device)
-    out_dir = ML_DIR / "checkpoints" / args.run
+    out_dir = args.checkpoints / args.run
     out_dir.mkdir(parents=True, exist_ok=True)
-    metrics_file = (out_dir / "metrics.jsonl").open("w", encoding="utf-8")
+    last_path = out_dir / "last.pt"
+    state = torch.load(last_path, map_location="cpu", weights_only=False) if args.resume and last_path.exists() else None
+    # Resuming appends to the metrics log; a fresh run starts it over.
+    metrics_file = (out_dir / "metrics.jsonl").open("a" if state else "w", encoding="utf-8")
 
     def log(record: dict) -> None:
         metrics_file.write(json.dumps(record) + "\n")
@@ -205,7 +215,25 @@ def main() -> int:
     optimizer = make_optimizer(model, args, device)
     print(f"Device {device} · {model.num_params():,} parameters · run '{args.run}'")
 
-    if args.pretrain_text and args.pretrain_steps:
+    if state and state["tokenizer"] != tok.to_dict():
+        print("The tokenizer changed since last.pt was saved (did src/data change?). "
+              "Start a new run instead of resuming.", file=sys.stderr)
+        return 1
+
+    def save_last(epoch: int, step: int, best: dict, stale: int) -> None:
+        """Everything needed to continue exactly where we left off. Written to a temp file
+        first, so a disconnect in the middle of saving can't corrupt the previous one."""
+        tmp = last_path.with_suffix(".tmp")
+        torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "step": step,
+                    "best": best, "stale": stale, "tokenizer": tok.to_dict(), "builder_rng": builder.rng.getstate(),
+                    "torch_rng": torch.get_rng_state(),
+                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None}, tmp)
+        tmp.replace(last_path)
+
+    if state:
+        score = f"best dev EM {state['best']['dev_em']:.1%}" if state["best"]["dev_em"] >= 0 else "no dev score yet"
+        print(f"Resuming from {last_path} (finished epoch {state['epoch']}, {score})")
+    elif args.pretrain_text and args.pretrain_steps:
         pretrain(model, tok, args, device, optimizer, log)
         optimizer = make_optimizer(model, args, device)  # fresh optimizer state for stage B
 
@@ -224,9 +252,21 @@ def main() -> int:
           f"({len(train_rows)} real + synthetic), {steps_per_epoch} steps/epoch, up to {args.epochs} epochs\n")
 
     best = {"dev_em": -1.0, "dev_loss": float("inf"), "epoch": 0}
-    stale, step, start = 0, 0, time.perf_counter()
+    stale, step, start, first = 0, 0, time.perf_counter(), 1
+    if state:
+        model.load_state_dict(state["model"])
+        optimizer.load_state_dict(state["optimizer"])
+        best, stale, step, first = state["best"], state["stale"], state["step"], state["epoch"] + 1
+        builder.rng.setstate(state["builder_rng"])
+        torch.set_rng_state(state["torch_rng"])
+        if state["cuda_rng"] is not None and device.type == "cuda":
+            torch.cuda.set_rng_state_all(state["cuda_rng"])
+        if stale >= args.patience or first > args.epochs:
+            print("That run had already finished.")
     model.train()
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(first, args.epochs + 1):
+        if stale >= args.patience:
+            break
         examples = first_epoch if epoch == 1 else builder.build()
         running = []
         for i in range(0, len(examples), args.batch_size):
@@ -267,17 +307,17 @@ def main() -> int:
                 stale = 0
             else:
                 stale += 1
-                if stale >= args.patience:
-                    print(f"\nEarly stopping: dev exact match hasn't improved in {args.patience} evaluations.")
-                    log(record)
-                    break
         else:
             print(f"{line} · {elapsed / 60:.1f} min")
         log(record)
+        save_last(epoch, step, best, stale)
+        if stale >= args.patience:
+            print(f"\nEarly stopping: dev exact match hasn't improved in {args.patience} evaluations.")
+            break
 
     metrics_file.close()
     print(f"\n✓ Best dev EM {best['dev_em']:.1%} (dev loss {best['dev_loss']:.3f}) at epoch {best['epoch']} "
-          f"→ {out_dir.relative_to(ML_DIR.parent)}/best.pt")
+          f"→ {out_dir / 'best.pt'}")
 
     # Qualitative check with the best weights, for error analysis.
     from askalfonso.inference import load_checkpoint
