@@ -137,7 +137,7 @@ The test split is never used during training; it's reserved for Phase 6.
 | Run | Change | Train-phrasing EM | Dev EM (new phrasings) |
 |---|---|---|---|
 | v1 | Baseline: 2–3 phrasings per question type | 99% | 34% |
-| v2 | 3× more training phrasings; endless invented unknowns; dedupe | — | — |
+| v2 | 3× more training phrasings; endless invented unknowns; dedupe | 100% | 63% |
 
 **v1 error analysis.** Near-perfect on phrasings seen in training, 34% on new ones:
 high *variance* — the model memorized wording instead of meaning (e.g. "Which tools
@@ -146,4 +146,18 @@ on unseen technologies ("Does he know Redis?" → "Yes… Rust in BlockCity") be
 ~22 unknown technologies in training could be memorized. A subtle leak also inflated
 v1's skill score: refusal questions reused the phrasings `skill.has` holds out for
 dev/test. v2 fixes all three; dev/test questions are unchanged so the runs compare.
+
+**v2 error analysis.** Fact questions went from 13% to 69% and skill questions from
+77% to 88% on dev (the latter despite removing the leak). The gap that remains:
+
+- **Refusals are right, but the name is wrong.** "Has he used Ruby on Rails?" → "I don't
+  have any information about *Ruby*…"; "Describe QuantumChess." → "…a project called
+  *Quirex*…". The model knows to refuse but copies long or rare names imperfectly.
+- **A few unseen phrasings still map to the wrong question type**, consistently: "Can you
+  explain X?" → X's problem; "Was X recognized anywhere?" → X's links.
+- **Occasional confident nonsense** on off-topic or private questions ("How much does
+  Answr make?" → a description of Answr).
+
+These are exactly what Phase 5's guardrails target: retrieval confidence, and a
+grounding check that rejects answers naming things absent from the context and question.
 
