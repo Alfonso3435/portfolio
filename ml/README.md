@@ -132,3 +132,18 @@ What makes it work:
 
 The test split is never used during training; it's reserved for Phase 6.
 
+### Results log
+
+| Run | Change | Train-phrasing EM | Dev EM (new phrasings) |
+|---|---|---|---|
+| v1 | Baseline: 2–3 phrasings per question type | 99% | 34% |
+| v2 | 3× more training phrasings; endless invented unknowns; dedupe | — | — |
+
+**v1 error analysis.** Near-perfect on phrasings seen in training, 34% on new ones:
+high *variance* — the model memorized wording instead of meaning (e.g. "Which tools
+did he use to build X?" was answered with X's problem statement). It also hallucinated
+on unseen technologies ("Does he know Redis?" → "Yes… Rust in BlockCity") because the
+~22 unknown technologies in training could be memorized. A subtle leak also inflated
+v1's skill score: refusal questions reused the phrasings `skill.has` holds out for
+dev/test. v2 fixes all three; dev/test questions are unchanged so the runs compare.
+

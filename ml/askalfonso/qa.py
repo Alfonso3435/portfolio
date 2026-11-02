@@ -110,6 +110,8 @@ class QAGenerator:
         answer: Callable[[dict], str],
         gold: Callable[[dict], list[str]],
     ) -> None:
+        # Extra phrasings go in front, so the last two templates (dev, test) stay fixed.
+        templates = EXTRA_TRAIN_TEMPLATES.get(intent, []) + templates
         for key, values in entities:
             for i, template in enumerate(templates):
                 question = template.format(**values)
@@ -149,7 +151,7 @@ class QAGenerator:
         self._awards()
         self._skills()
         self._refusals()
-        return self.examples
+        return dedupe(self.examples)
 
     # ── profile ──────────────────────────────────────────────────────────────
 
@@ -468,8 +470,7 @@ class QAGenerator:
 
     def _skills(self) -> None:
         kb = self.kb
-        templates = ["Does he know {s}?", "Has he used {s}?", "Is he familiar with {s}?",
-                     "What experience does he have with {s}?", "Can he work with {s}?"]
+        templates = EXTRA_TRAIN_TEMPLATES["skill.has"] + SKILL_TEMPLATES
 
         def tech_aliases(name: str) -> list[str]:
             base = name.split(" (")[0]
@@ -530,20 +531,17 @@ class QAGenerator:
 
         known = {a.lower() for tech in kb.tech_sources for a in [tech, tech.split(" (")[0], *tech.split(" / ")]}
         unknown_tech = [t for t in UNKNOWN_TECH if t.lower() not in known]
-        templates = ["Does he know {s}?", "Has he used {s}?", "Is he familiar with {s}?",
-                     "What experience does he have with {s}?", "Can he work with {s}?"]
         tech_splits = split_items(unknown_tech)
         for tech in unknown_tech:
             split = tech_splits[tech]  # every phrasing of an unseen tech stays in the same split
+            # Train items only use train phrasings: otherwise "Can he work with Rust?" would teach
+            # the phrasing that skill.has holds out for its test set (a subtle leak found in v1).
+            templates = skill_unknown_templates(split)
             for i, template in enumerate(templates):
                 self.examples.append(
                     QA(
                         id=f"skill.unknown:{tech}:{i}", intent="skill.unknown", type="unknown_skill",
-                        question=template.format(s=tech),
-                        answer=(
-                            f"I don't have any information about {tech} in Alfonso's profile, so I can't say. "
-                            f"You can ask him directly at {email}."
-                        ),
+                        question=template.format(s=tech), answer=unknown_skill_answer(tech, email),
                         gold_chunks=[], split=split,
                     )
                 )
@@ -553,15 +551,11 @@ class QAGenerator:
         project_splits = split_items(unknown_projects)
         for name in unknown_projects:
             split = project_splits[name]
-            for i, template in enumerate(["What is {n}?", "Tell me about {n}.", "What did he build for {n}?"]):
+            for i, template in enumerate(PROJECT_UNKNOWN_TEMPLATES):
                 self.examples.append(
                     QA(
                         id=f"project.unknown:{name}:{i}", intent="project.unknown", type="unknown_entity",
-                        question=template.format(n=name),
-                        answer=(
-                            f"I don't know of a project called {name} in Alfonso's portfolio. "
-                            f"You can see all of his projects at {SITE}/projects."
-                        ),
+                        question=template.format(n=name), answer=unknown_project_answer(name),
                         gold_chunks=[], split=split,
                     )
                 )
@@ -622,6 +616,132 @@ OFF_TOPIC = [
     "What is machine learning?", "Summarize the news today.", "Who are you voting for?",
     "Give me a recipe for tacos.", "What time is it?",
 ]
+
+
+# ── shared answers and phrasings (also used by synthetic.py) ────────────────
+
+SKILL_TEMPLATES = ["Does he know {s}?", "Has he used {s}?", "Is he familiar with {s}?",
+                   "What experience does he have with {s}?", "Can he work with {s}?"]
+
+PROJECT_UNKNOWN_TEMPLATES = ["What is {n}?", "Tell me about {n}.", "What did he build for {n}?", "Describe {n}.",
+                             "What tech stack did he use for {n}?", "What was his role in {n}?",
+                             "Did {n} win any awards?"]
+
+
+def skill_train_templates() -> list[str]:
+    """Every skill phrasing except the two that skill.has holds out for dev and test."""
+    return EXTRA_TRAIN_TEMPLATES["skill.has"] + SKILL_TEMPLATES[:-2]
+
+
+def skill_unknown_templates(split: str) -> list[str]:
+    return skill_train_templates() if split == "train" else SKILL_TEMPLATES
+
+
+def unknown_skill_answer(tech: str, email: str) -> str:
+    return (f"I don't have any information about {tech} in Alfonso's profile, so I can't say. "
+            f"You can ask him directly at {email}.")
+
+
+def unknown_project_answer(name: str) -> str:
+    return (f"I don't know of a project called {name} in Alfonso's portfolio. "
+            f"You can see all of his projects at {SITE}/projects.")
+
+
+def _norm_question(q: str) -> str:
+    return q.lower().rstrip("?.!").strip()
+
+
+def dedupe(examples: list[QA]) -> list[QA]:
+    """Drop repeated questions, keeping the first one.
+
+    Example: "What is ZapTap?" is both a company question and a project question,
+    with two different answers. Training on both would teach the model to guess.
+    """
+    seen, out = set(), []
+    for ex in examples:
+        key = _norm_question(ex.question)
+        if key not in seen:
+            seen.add(key)
+            out.append(ex)
+    return out
+
+
+# More ways to ask each question, used ONLY for training (v2). After the v1 run,
+# error analysis showed 99% exact match on phrasings seen in training vs 34% on new
+# ones: the model had memorized wording. More phrasing variety is the fix.
+EXTRA_TRAIN_TEMPLATES: dict[str, list[str]] = {
+    "profile.about": ["Who's Alfonso?", "What's Alfonso's background?", "Introduce Alfonso.",
+                      "Can you tell me who Alfonso is?", "What should I know about Alfonso?",
+                      "Summarize Alfonso's profile.", "Give me an overview of Alfonso.",
+                      "Who is the person behind this site?"],
+    "profile.looking_for": ["What roles is he interested in?", "Is he open to work?", "Is Alfonso job hunting?",
+                            "What opportunities is he looking for?", "Would he consider an ML internship?",
+                            "Is he available for hire?", "What position is he seeking?", "Is he looking for a job?"],
+    "profile.contact": ["How do I get in touch with Alfonso?", "What is Alfonso's email address?",
+                        "Where can I contact him?", "How can I reach out to him?", "Is there a way to contact Alfonso?",
+                        "Can I email him?", "What's his contact info?"],
+    "profile.location": ["Which city is Alfonso based in?", "Where is Alfonso based?", "Is he located in Washington?",
+                         "Where does he work from?", "What's his location?"],
+    "profile.languages": ["Which languages does he speak?", "Does Alfonso speak English?", "Can he speak German?",
+                          "Is he fluent in English?", "What languages can Alfonso communicate in?",
+                          "Does he speak any other languages?"],
+    "greeting": ["Hey", "Good morning", "Hi there!", "Hello, who am I talking to?", "What are you?",
+                 "How does this work?"],
+    "education.current": ["Where does Alfonso go to school?", "What's he majoring in?", "Which university is he at?",
+                          "What degree is he pursuing?", "When will he finish his degree?",
+                          "What year is he expected to graduate?", "Does he go to UW?"],
+    "education.gpa": ["What is Alfonso's GPA?", "How good are his grades?", "What were his grades like?",
+                      "Tell me his GPA."],
+    "education.before": ["Where did Alfonso study before?", "What's his educational background?",
+                         "Where else has he studied?", "Did he transfer to UW?", "What was his path to UW?"],
+    "education.bellevue": ["Did Alfonso go to Bellevue College?", "What courses did he take at Bellevue College?",
+                           "What did he study at Bellevue College?", "When was he at Bellevue College?"],
+    "education.certifications": ["Does he have any certifications?", "What courses has he taken online?",
+                                 "Has he completed the Machine Learning Specialization?",
+                                 "Which certificates does Alfonso have?", "What has he learned outside of school?",
+                                 "Did he study deep learning online?"],
+    "experience.overview": ["What's {c}?", "Explain {c} to me.", "What is {c} about?", "Give me an overview of {c}.",
+                            "What kind of organization is {c}?", "Describe {c}."],
+    "experience.role": ["What was Alfonso's role at {c}?", "What is his position at {c}?", "What did he do at {c}?",
+                        "What is he responsible for at {c}?", "What's his title at {c}?",
+                        "Tell me about his work at {c}."],
+    "experience.dates": ["Since when has he been at {c}?", "When did Alfonso start at {c}?",
+                         "How long did he work at {c}?", "What dates was he at {c}?", "When was he part of {c}?"],
+    "experience.stack": ["What stack does he use at {c}?", "Which technologies did he use at {c}?",
+                         "What tech does he work with at {c}?", "What languages and tools does he use at {c}?"],
+    "project.overview": ["What's {t}?", "Describe {t}.", "What does {t} do?", "Give me an overview of {t}.",
+                         "Explain {t} to me.", "I want to know about {t}.", "What is the {t} project?"],
+    "project.built": ["What did he make in {t}?", "What features did he build for {t}?", "What does {t} include?",
+                      "Which parts of {t} did he build?", "Describe what he built for {t}.",
+                      "What did Alfonso create for {t}?", "What are the components of {t}?"],
+    "project.stack": ["What stack does {t} use?", "What's the tech stack of {t}?",
+                      "Which technologies did Alfonso use in {t}?", "What tools power {t}?",
+                      "What frameworks does {t} use?", "Tech stack for {t}?", "What did he use to build {t}?"],
+    "project.role": ["What did he do in {t}?", "What part did Alfonso play in {t}?", "Who built {t}?",
+                     "How many people worked on {t}?", "What was Alfonso responsible for in {t}?",
+                     "Did he build {t} alone?", "What was his contribution to {t}?"],
+    "project.problem": ["What is the problem behind {t}?", "What problem was {t} built to solve?", "Why does {t} exist?",
+                        "What pain point does {t} tackle?", "What's the purpose of {t}?", "What issue does {t} fix?"],
+    "project.results": ["What results did {t} get?", "What was the outcome of {t}?", "Did {t} have any results?",
+                        "How well did {t} work?", "What came out of {t}?", "Was {t} successful?"],
+    "project.award": ["Did {t} get any awards?", "Did {t} win a hackathon?", "Has {t} won anything?",
+                      "Any awards for {t}?", "Did {t} place in a competition?"],
+    "project.links": ["Is there a live version of {t}?", "Where can I find {t}?", "Do you have a link for {t}?",
+                      "Can I see a demo of {t}?", "Is {t} online?", "Where's the code for {t}?"],
+    "award.detail": ["What did Alfonso win at {e}?", "How did he place at {e2}?", "What was his result at {e}?",
+                     "Did he win at {e2}?", "What did he do at {e}?"],
+    "award.list": ["Has he won any awards?", "What awards does Alfonso have?", "What hackathons has he won?",
+                   "Tell me about his awards.", "What are his biggest wins?", "Has he received any recognition?"],
+    "skill.has": ["Does Alfonso know {s}?", "Has Alfonso worked with {s}?", "Does he use {s}?", "Is he good at {s}?",
+                  "Do you know if he knows {s}?", "Has he ever used {s}?", "Does he have {s} experience?",
+                  "Is {s} one of his skills?"],
+    "skill.group": ["What {g} skills does he have?", "How strong is he in {g}?", "List his {g} skills.",
+                    "What does Alfonso know in {g}?", "Which {g} technologies does he know?"],
+    "skill.programming_languages": ["Which languages does he program in?", "What coding languages does Alfonso know?",
+                                    "What programming languages has he used?",
+                                    "Does he know any programming languages?",
+                                    "List the programming languages he uses."],
+}
 
 
 # ── post-processing ──────────────────────────────────────────────────────────

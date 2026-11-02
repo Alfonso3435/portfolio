@@ -13,6 +13,11 @@ The fix
 
     The real facts teach the answer *style*; the fake ones teach *reading*.
 
+    The same trick teaches honest refusals: every epoch also asks about invented
+    technologies ("Does he know Zorvex DB?") and projects that don't exist. A fixed
+    list of unknowns can be memorized; an endless stream forces the model to copy
+    the name from the question and say it doesn't know.
+
 Two leakage guards
     • Only paraphrase templates from the *train* split are used, so the test set's
       unseen phrasings stay unseen.
@@ -24,8 +29,17 @@ from __future__ import annotations
 
 import random
 
+from collections import defaultdict
+
 from .knowledge import Chunk, Knowledge
-from .qa import QA, QAGenerator
+from .qa import (
+    PROJECT_UNKNOWN_TEMPLATES,
+    QA,
+    QAGenerator,
+    skill_train_templates,
+    unknown_project_answer,
+    unknown_skill_answer,
+)
 
 SYLLABLES = ["ka", "lo", "mi", "ra", "ve", "zu", "to", "ne", "sa", "qui", "dor", "len", "vi", "ta", "mo", "rex",
              "pa", "li", "no", "ga", "fe", "tri", "so", "ul", "ber", "cam", "dex", "or", "ni", "plu"]
@@ -73,6 +87,14 @@ PROBLEMS = [
 ]
 ROLES = ["Backend engineer", "ML engineer", "Full-stack developer", "Team lead & developer", "Data engineer",
          "Front-end developer", "Developer & presenter"]
+# Real technologies that never appear in the site data or in TECH_POOL, so a refusal
+# about them can never contradict a (real or fake) chunk in the context.
+EXTRA_UNKNOWN_TECH = ["Elm", "Clojure", "F#", "Julia", "Perl", "Lua", "Dart", "Erlang", "OCaml", "Zig", "Nim",
+                      "Fortran", "COBOL", "Cassandra", "DynamoDB", "Neo4j", "Elasticsearch", "RabbitMQ", "Airflow",
+                      "Databricks", "Looker", "Jenkins", "Prometheus", "Grafana", "Nginx", "jQuery", "Laravel",
+                      "Express", "Ruby", "Haskell", "Scala", "Tableau", "Solidity", "Ansible"]
+TECH_SUFFIXES = [".js", " DB", "Lang", " ML", "OS", "Kit", "Stack", "Script"]
+
 RESULTS = [
     "Reached {n}% accuracy on the test set.", "Cut processing time from {m} minutes to under {s} seconds.",
     "Used by {u} students during the pilot.", "Placed in the top {k} at the final demo.",
@@ -146,15 +168,55 @@ def fake_knowledge(real: Knowledge, n_projects: int, rng: random.Random, banned_
 
 
 def synthetic_examples(
-    real: Knowledge, n_projects: int, rng: random.Random, banned_tech: set[str]
+    real: Knowledge, n_projects: int, rng: random.Random, banned_tech: set[str], per_intent: int = 2
 ) -> tuple[list[QA], dict[str, str]]:
-    """Fresh fake projects → (Q&A examples using train templates only, {chunk_id: text})."""
+    """Fresh fake projects → (Q&A using train templates only, {chunk_id: text}).
+
+    Keeps `per_intent` random phrasings per (intent, project), so synthetic data
+    stays a minority next to the real examples.
+    """
     kb = fake_knowledge(real, n_projects, rng, banned_tech)
     chunks: list[Chunk] = kb._project_chunks()
     gen = QAGenerator(kb)
     gen._projects()
     gen._skills()
-    examples = [ex for ex in gen.examples if ex.split == "train"]
+    groups: dict[tuple[str, str], list[QA]] = defaultdict(list)
+    for ex in gen.examples:
+        if ex.split == "train":
+            groups[(ex.intent, ex.id.split(":")[1])].append(ex)
+    examples = []
+    for group in groups.values():
+        examples += rng.sample(group, min(per_intent, len(group)))
     for ex in examples:
         ex.id = f"synthetic:{ex.id}"
     return examples, {c.id: c.text for c in chunks}
+
+
+def invented_tech(rng: random.Random) -> str:
+    base = "".join(rng.choice(SYLLABLES) for _ in range(2)).capitalize()
+    return base + rng.choice(TECH_SUFFIXES)
+
+
+def synthetic_refusals(
+    real: Knowledge, rng: random.Random, n_tech: int, n_projects: int, banned_tech: set[str]
+) -> list[QA]:
+    """Questions about technologies and projects that don't exist anywhere in the data."""
+    known = {a.lower() for t in real.tech_sources for a in [t, t.split(" (")[0], *t.split(" / ")]}
+    known |= {t.lower() for t in TECH_POOL} | banned_tech
+    real_unknown = [t for t in EXTRA_UNKNOWN_TECH if t.lower() not in known]
+    taken = {p["title"].lower() for p in real.projects}
+    templates = skill_train_templates()
+    out = []
+    for i in range(n_tech):
+        tech = rng.choice(real_unknown) if rng.random() < 0.5 else invented_tech(rng)
+        for template in rng.sample(templates, 2):
+            out.append(QA(id=f"synthetic:skill.unknown:{tech}:{i}", intent="skill.unknown", type="unknown_skill",
+                          question=template.format(s=tech), answer=unknown_skill_answer(tech, real.email),
+                          gold_chunks=[], split="train"))
+    for i in range(n_projects):
+        name = _name(rng, taken)
+        for template in rng.sample(PROJECT_UNKNOWN_TEMPLATES, 2):
+            out.append(QA(id=f"synthetic:project.unknown:{name}:{i}", intent="project.unknown",
+                          type="unknown_entity", question=template.format(n=name),
+                          answer=unknown_project_answer(name), gold_chunks=[], split="train"))
+    return out

@@ -15,7 +15,7 @@ if importlib.util.find_spec("torch") is None:
 
 from askalfonso.knowledge import Knowledge
 from askalfonso.prompt import SPECIAL_TOKENS
-from askalfonso.synthetic import TECH_POOL, synthetic_examples
+from askalfonso.synthetic import TECH_POOL, synthetic_examples, synthetic_refusals
 from askalfonso.tokenizer import BPETokenizer
 from askalfonso.training_data import ContextPolicy, fit_example, sample_context
 
@@ -75,6 +75,27 @@ class SyntheticTests(unittest.TestCase):
     def test_names_change_every_call(self):
         _, other = synthetic_examples(tiny_knowledge(), 8, random.Random(4), banned_tech=set())
         self.assertNotEqual(set(self.chunks), set(other))
+
+
+class SyntheticRefusalTests(unittest.TestCase):
+    def test_refusals_name_the_unknown_thing_and_never_use_pool_tech(self):
+        refusals = synthetic_refusals(tiny_knowledge(), random.Random(0), n_tech=20, n_projects=10, banned_tech=set())
+        pool = {t.lower() for t in TECH_POOL}
+        for ex in refusals:
+            name = ex.id.split(":")[2]
+            self.assertIn(name, ex.question)  # the model must copy it from the question…
+            self.assertIn(name, ex.answer)  # …into the answer
+            self.assertNotIn(name.lower(), pool)  # never contradicts a fake project in the context
+            self.assertEqual(ex.gold_chunks, [])
+
+
+class DedupeTests(unittest.TestCase):
+    def test_same_question_keeps_first_answer(self):
+        from askalfonso.qa import QA, dedupe
+
+        a = QA("1", "x", "fact", "What is ZapTap?", "first", [], "train")
+        b = QA("2", "y", "fact", "what is zaptap", "second", [], "train")
+        self.assertEqual([e.answer for e in dedupe([a, b])], ["first"])
 
 
 class ScheduleTests(unittest.TestCase):

@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--block-size", type=int, default=768)
     p.add_argument("--dropout", type=float, default=0.1)
     # optimization
-    p.add_argument("--epochs", type=int, default=150)
+    p.add_argument("--epochs", type=int, default=80)
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--min-lr", type=float, default=1e-4)
@@ -77,7 +77,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pretrain-steps", type=int, default=0)
     # evaluation / early stopping
     p.add_argument("--eval-samples", type=int, default=150, help="dev examples scored by exact match")
-    p.add_argument("--eval-every", type=int, default=5, help="score dev exact match every N epochs (it's slow)")
+    p.add_argument("--eval-every", type=int, default=4, help="score dev exact match every N epochs (it's slow)")
     p.add_argument("--patience", type=int, default=6, help="exact-match evaluations without improvement before stopping")
     # misc
     p.add_argument("--run", default=datetime.now().strftime("%Y%m%d-%H%M"))

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from .data import Encoded, encode_example
 from .knowledge import Knowledge
-from .synthetic import synthetic_examples
+from .synthetic import synthetic_examples, synthetic_refusals
 from .tokenizer import BPETokenizer
 
 CONTEXT_SEPARATOR = "\n"
@@ -110,7 +110,10 @@ class EpochBuilder:
 
         if self.synthetic_projects:
             examples, fake_chunks = synthetic_examples(self.kb, self.synthetic_projects, self.rng, self.banned_tech)
-            # Distractors for fake projects can be real chunks or other fake ones.
+            # Refusals about invented technologies/projects: about 1 per 2 fake projects' worth of questions.
+            examples += synthetic_refusals(self.kb, self.rng, n_tech=2 * self.synthetic_projects,
+                                           n_projects=self.synthetic_projects, banned_tech=self.banned_tech)
+            # Distractors can be real chunks or fake ones.
             pool = {**self.chunks, **fake_chunks}
             for ex in examples:
                 ids = sample_context(ex.gold_chunks, pool, self.rng, self.policy)
