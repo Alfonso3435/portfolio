@@ -101,6 +101,22 @@ class Hit:
     score: float
 
 
+# How retrieved chunks become the model's context. Shared by training (v3) and the
+# pipeline, so the model trains on exactly the kind of context it will see.
+THRESHOLD = 0.10  # τ: below this score a chunk isn't shown (tuned on dev in Phase 5)
+RELATIVE = 0.5  # extra chunks must also score ≥ RELATIVE × the top score
+MAX_CHUNKS = 3
+
+
+def select_hits(hits: list[Hit], threshold: float = THRESHOLD, relative: float = RELATIVE,
+                max_chunks: int = MAX_CHUNKS) -> list[Hit]:
+    """The hits (sorted best first) that are confident enough to show the model."""
+    if not hits or hits[0].score < threshold:
+        return []
+    floor = max(threshold, relative * hits[0].score)
+    return [h for h in hits if h.score >= floor][:max_chunks]
+
+
 class TfidfRetriever:
     def __init__(self, chunks: list[dict], title_weight: int = 2, entity_bonus: float = 0.5):
         """chunks: [{"id", "title", "text", "entities"}]. Titles are repeated to count more.

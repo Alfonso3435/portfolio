@@ -122,9 +122,11 @@ What makes it work:
   memorized, so the model must learn to *read* the context — which is what lets new
   projects work later without retraining. Only train-split templates are used, and
   dev/test "unknown" technologies are never placed in a fake stack (no leakage).
-- **Realistic contexts** (`askalfonso/training_data.py`). Fact questions get their
-  gold chunk(s) plus, half the time, an irrelevant distractor; refusals get only
-  irrelevant chunks or none. Resampled every epoch.
+- **Realistic contexts** (`askalfonso/training_data.py`). Since v3, 70% of contexts are
+  exactly what the retriever would show for that question (related chunks, best first;
+  empty for most refusals), so training matches what the model reads on the site. The other
+  30% use v2's random policy (gold + a random distractor; refusals get 0–2 random chunks)
+  for robustness. Resampled every epoch.
 - **Recipe.** AdamW (decay on weight matrices only), linear warmup + cosine decay,
   gradient clipping, dropout, answer-only loss, early stopping on dev exact match.
 - **Optional stage A.** `--pretrain-text … --pretrain-steps …` runs plain
@@ -138,6 +140,11 @@ The test split is never used during training; it's reserved for Phase 6.
 |---|---|---|---|
 | v1 | Baseline: 2–3 phrasings per question type | 99% | 34% |
 | v2 | 3× more training phrasings; endless invented unknowns; dedupe | 100% | 63% |
+| v3 | Retrieval-style contexts; award + links in project chunks; ~1.7× more training questions; WikiText-2 pretraining | _pending_ | _pending_ |
+
+Dev EM from v3 on is measured on **retrieved** contexts (as in the pipeline), so it isn't
+directly comparable with v1/v2's random contexts. The fair comparison is the Phase 5
+pipeline table below, where every model is run end to end on the same dev questions.
 
 **v1 error analysis.** Near-perfect on phrasings seen in training, 34% on new ones:
 high *variance* — the model memorized wording instead of meaning (e.g. "Which tools
@@ -228,3 +235,31 @@ through is grounded in what the model read — no invented names or numbers.
   them. Grounding facts cover them for now; v3 should put them in the chunks.
 
 Latency on CPU is ~0.3–2.5 s per question (no KV cache yet) — a Phase 7 concern.
+
+### v3: what changed and why
+
+Phase 5's error analysis showed that every wrong answer had the right chunk in its context:
+retrieval was fine, the *reader* wasn't. v3 targets the reader:
+
+1. **Award and links inside each project chunk** (`knowledge.py`). Fixes the data bug where
+   "Did X win anything?" and "Is there a demo of X?" could only be memorized.
+2. **Train on the contexts it will see** (`training_data.py`, `retrieval.select_hits`, shared
+   with the pipeline). v2 trained with random distractors; on the site it reads *related*
+   chunks (other chunks about the same project or technology), which are harder to tell apart.
+3. **~1,700 more training questions** (new phrasings in `qa.py`, `MORE_TRAIN_TEMPLATES`, for every intent; 2,293 → 3,998 real training examples):
+   the remaining errors are still high variance on unseen wording.
+4. **Softer metrics** (`metrics.py`): token F1 and key facts next to exact match, so
+   "ESP32 / Arduino" for "ESP32" isn't scored like a wrong answer.
+5. **Pretraining on WikiText-2** (stage A) turned on in the notebook.
+
+Two safeguards added while doing this: a dev/test question now always wins over a duplicate
+train phrasing (39 new phrasings matched held-out questions and would have silently removed
+them), and which questions get lowercased is decided by a hash of the question, so adding
+training data never changes the dev or test sets. Dev and test are identical with and without
+the new phrasings (verified).
+
+Because Phase 5's error analysis looked at dev, dev is now slightly optimistic. The untouched
+test set (Phase 6) gives the honest number.
+
+**Baseline to beat** (v2, current dev, its own chunk format, τ = 0.10): answerable 73.9%
+exact / 81.7% F1 / 81.5% key facts; 95.5% of should-refuse questions refused.

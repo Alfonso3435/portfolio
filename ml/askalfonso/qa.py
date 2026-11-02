@@ -24,7 +24,6 @@ How the split works (and why):
 from __future__ import annotations
 
 import hashlib
-import random
 from dataclasses import asdict, dataclass
 from typing import Callable, Iterable
 
@@ -648,18 +647,20 @@ def _norm_question(q: str) -> str:
 
 
 def dedupe(examples: list[QA]) -> list[QA]:
-    """Drop repeated questions, keeping the first one.
+    """Drop repeated questions.
 
     Example: "What is ZapTap?" is both a company question and a project question,
     with two different answers. Training on both would teach the model to guess.
+
+    A dev/test question always beats a train duplicate (otherwise the first one wins).
+    That way adding training phrasings can never silently change the dev or test sets —
+    in v3, 39 new phrasings matched held-out ones and would have removed them.
     """
-    seen, out = set(), []
-    for ex in examples:
-        key = _norm_question(ex.question)
-        if key not in seen:
-            seen.add(key)
-            out.append(ex)
-    return out
+    winners: dict[str, QA] = {}
+    for ex in sorted(examples, key=lambda e: e.split == "train"):  # stable sort: dev/test first
+        winners.setdefault(_norm_question(ex.question), ex)
+    keep = {id(ex) for ex in winners.values()}
+    return [ex for ex in examples if id(ex) in keep]
 
 
 # More ways to ask each question, used ONLY for training (v2). After the v1 run,
@@ -740,18 +741,100 @@ EXTRA_TRAIN_TEMPLATES: dict[str, list[str]] = {
 }
 
 
+# v3: more training phrasings, every intent. Same rule as above — these only ever go to
+# train; the dev/test phrasings stay the last two templates of each intent. Written as
+# fresh paraphrases (questions, commands, fragments, casual wording), not copied from dev.
+MORE_TRAIN_TEMPLATES: dict[str, list[str]] = {
+    "profile.about": ["Tell me about Alfonso.", "Who are we talking about here?", "Quick intro to Alfonso, please.",
+                      "What does Alfonso do?", "In a few words, who is he?", "Describe Alfonso.",
+                      "What's his story?", "Who is Alfonso Vega?"],
+    "profile.looking_for": ["Is he looking for an internship?", "What kind of job does he want?",
+                            "Can I recruit him for a summer role?", "What is he looking for right now?",
+                            "Is he open to software engineering roles?", "When is he available to work?",
+                            "Is he searching for internships in 2027?"],
+    "profile.contact": ["How should a recruiter contact him?", "Email for Alfonso?", "How do I message Alfonso?",
+                        "Best way to reach him?", "Is he on LinkedIn?", "Who do I contact about hiring him?",
+                        "Give me his email."],
+    "profile.location": ["Where is he?", "Where's he located?", "What area does he live in?",
+                         "Is he in the Seattle area?", "Which state is he in?", "Where is he based out of?"],
+    "profile.languages": ["Is he bilingual?", "Does he speak Spanish?", "How many languages does he speak?",
+                          "What's his native language?", "Spanish and English?", "Can he work in Spanish?"],
+    "greeting": ["Hi!", "Hello there", "Yo", "Good evening", "Who am I chatting with?", "What can I ask you?",
+                 "Hey, what's up?", "Are you a bot?"],
+    "education.current": ["What does he study?", "What school is he at?", "Is he a student?",
+                          "What's his major?", "Where is he studying now?", "Is he at the Allen School?",
+                          "When does he graduate?", "What university does Alfonso attend?"],
+    "education.gpa": ["What GPA did he have?", "Grades?", "Was he a good student?", "What GPA does Alfonso have?",
+                      "How did he do academically?"],
+    "education.before": ["Where did he go before UW?", "Did he study in Mexico?", "Which schools has he attended?",
+                         "What schools did he go to?", "Where did his studies start?",
+                         "What did he study before the University of Washington?"],
+    "education.bellevue": ["Why did he go to Bellevue College?", "What did he do at Bellevue College?",
+                           "Tell me about his time at Bellevue College.", "Which classes did he take at Bellevue College?"],
+    "education.certifications": ["What certifications does he hold?", "Has he done any Coursera courses?",
+                                 "List his certificates.", "What online courses has he finished?",
+                                 "Does he have a deep learning certificate?", "What did he learn on his own?"],
+    "experience.overview": ["What does {c} do?", "Tell me what {c} is.", "{c}?", "What is {c}, exactly?",
+                            "Can you describe {c}?", "Quick summary of {c}?"],
+    "experience.role": ["What's his job at {c}?", "His role at {c}?", "What does he do for {c}?",
+                        "What position does Alfonso hold at {c}?", "How is he involved in {c}?",
+                        "What has he done at {c}?"],
+    "experience.dates": ["When did he join {c}?", "How long has he been at {c}?", "When did his time at {c} start?",
+                         "Start date at {c}?", "Is he still at {c}?"],
+    "experience.stack": ["What tools does he use at {c}?", "What's the tech behind {c}?", "{c} tech stack?",
+                         "Which frameworks does he use at {c}?", "What does {c} run on?"],
+    "project.overview": ["What is {t} about?", "Tell me what {t} is.", "{t}?", "Summarize {t}.",
+                         "Quick overview of {t}, please.", "What's the idea behind {t}?",
+                         "Describe the {t} project.", "Walk me through {t}."],
+    "project.built": ["What did he build for {t}?", "What did he develop in {t}?", "What's in {t}?",
+                      "What did he implement for {t}?", "What features does {t} have?",
+                      "List what he built in {t}.", "What work did he do on {t}?"],
+    "project.stack": ["What is {t} made with?", "{t} tech stack?", "What languages is {t} written in?",
+                      "What does {t} run on?", "Which libraries did he use for {t}?",
+                      "What technologies are behind {t}?", "Stack used in {t}?"],
+    "project.role": ["What was his job on {t}?", "Was {t} a team project?", "How big was the {t} team?",
+                     "What did Alfonso do on {t}?", "Was he the lead on {t}?", "His role in {t}?",
+                     "Who did he build {t} with?"],
+    "project.problem": ["What problem does {t} solve?", "Why did he build {t}?", "What need is {t} for?",
+                        "Who is {t} for, and why?", "What's the motivation for {t}?",
+                        "What challenge does {t} address?", "What was {t} trying to fix?"],
+    "project.results": ["What were the results of {t}?", "How did {t} turn out?", "Any metrics for {t}?",
+                        "What did {t} achieve?", "How accurate is {t}?", "What impact has {t} had?"],
+    "project.award": ["Did {t} win an award?", "What did {t} win?", "Was {t} a winning project?",
+                      "Did {t} get recognition?", "Did {t} win a prize?", "Awards for {t}?",
+                      "Did {t} take first place anywhere?"],
+    "project.links": ["Link to {t}?", "Is {t} live?", "Can I try {t} online?", "Is there a video of {t}?",
+                      "Where is the {t} repo?", "Show me {t}.", "Where can I watch the {t} demo?"],
+    "award.detail": ["Tell me about his result at {e}.", "What place did he get at {e}?", "{e2}?",
+                     "What did he win at {e2}?", "How did his team do at {e}?", "What happened at {e}?"],
+    "award.list": ["List his awards.", "Which hackathons did he win?", "Any awards?", "Has he won anything?",
+                   "What prizes has he won?", "What competitions has he placed in?"],
+    "skill.has": ["Is he experienced with {s}?", "Does he work with {s}?", "Has he built anything with {s}?",
+                  "{s}?", "Any experience with {s}?", "Does he have experience in {s}?",
+                  "Has he coded in {s}?", "Do his projects use {s}?", "Is he comfortable with {s}?",
+                  "Where has he used {s}?"],
+    "skill.group": ["What are his {g} skills?", "Tell me about his {g} skills.", "His {g} stack?",
+                    "Is he strong in {g}?", "What {g} tools does he use?"],
+    "skill.programming_languages": ["What languages does he code in?", "Which programming languages does Alfonso use?",
+                                    "What languages does he write code in?", "Programming languages?",
+                                    "Is he a Python developer?"],
+}
+for _intent, _extra in MORE_TRAIN_TEMPLATES.items():
+    EXTRA_TRAIN_TEMPLATES[_intent] = _extra + EXTRA_TRAIN_TEMPLATES[_intent]
+
+
 # ── post-processing ──────────────────────────────────────────────────────────
 
 
-def add_casual_variants(examples: list[QA], seed: int = 42, rate: float = 0.25) -> None:
+def add_casual_variants(examples: list[QA], rate: float = 0.25) -> None:
     """Real visitors type 'does he know pytorch' — lowercase, no punctuation.
 
-    A fixed fraction of questions (chosen with a fixed seed, so it's reproducible)
-    is rewritten that way, in every split, so training and evaluation both see it.
+    About `rate` of the questions, in every split, are rewritten that way. Which ones
+    is decided by a hash of the question itself (not a running random generator), so
+    adding training examples never changes which dev/test questions get rewritten.
     """
-    rng = random.Random(seed)
     for ex in examples:
-        if rng.random() < rate:
+        if _stable_hash(f"casual:{ex.split}:{ex.intent}:{ex.question}") % 10_000 < rate * 10_000:
             ex.question = ex.question.lower().rstrip("?.!").strip()
 
 

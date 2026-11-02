@@ -1,14 +1,17 @@
 """Builds each training epoch: real Q&A + fresh synthetic Q&A, each with a sampled context.
 
-What the model sees at inference (Phase 5): the retriever returns the top few
-chunks for the question — usually the right one, sometimes plus an unrelated
-one, and for off-topic questions only unrelated ones. Training mimics that:
+What the model sees at inference (Phase 5): the chunks the TF-IDF retriever selects
+for the question — the right one plus *related* ones (other chunks that mention the
+same project or technology), and for most refusals nothing at all.
 
-    fact / skill question  → its gold chunk(s), plus a random distractor 50% of the time
-    refusal question       → 1–2 random (irrelevant) chunks, or no context at all
+v3 trains on that same kind of context (train/test distributions should match):
 
-Shuffling the chunks and resampling distractors every epoch means the model can't
-rely on *where* the answer is or on a fixed context: it has to read.
+    70%  retrieval context  → exactly what the pipeline would show (select_hits), with
+                              any missing gold chunk added so the answer is readable
+    30%  random context     → v2's policy: gold + a random distractor half the time;
+                              refusals get 0–2 random chunks. Keeps the model robust
+                              when retrieval is imperfect and stops it from relying on
+                              chunk order.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from dataclasses import dataclass
 
 from .data import Encoded, encode_example
 from .knowledge import Knowledge
+from .retrieval import TfidfRetriever, select_hits
 from .synthetic import synthetic_examples, synthetic_refusals
 from .tokenizer import BPETokenizer
 
@@ -33,6 +37,7 @@ class ContextPolicy:
     distractor_prob: float = 0.5  # chance a fact question also gets an irrelevant chunk
     refusal_empty_prob: float = 0.3  # chance a refusal question gets no context at all
     max_chunks: int = 3
+    retrieval_prob: float = 0.7  # chance of using the retriever's context instead of a random one
 
 
 def sample_context(
@@ -50,6 +55,24 @@ def sample_context(
         picked = rng.sample(others, rng.choice([1, 2]))
     rng.shuffle(picked)
     return picked
+
+
+def retrieved_context(retriever: TfidfRetriever, question: str, gold: list[str], max_chunks: int = 3) -> list[str]:
+    """The context the pipeline would build for this question (best chunk first).
+
+    If a gold chunk isn't among them it's added at the end — training needs the answer
+    to be readable; at inference recall@3 is 100% on dev, so this is rare.
+    """
+    ids = [h.chunk_id for h in select_hits(retriever.search(question, k=max_chunks), max_chunks=max_chunks)]
+    for g in gold:
+        if g not in ids:
+            ids.append(g)
+    while len(ids) > max(max_chunks, len(gold)):  # make room by dropping the weakest non-gold chunk
+        extra = [c for c in ids if c not in gold]
+        if not extra:
+            break
+        ids.remove(extra[-1])
+    return ids
 
 
 def fit_example(
@@ -93,7 +116,10 @@ class EpochBuilder:
         banned_tech: set[str],
         policy: ContextPolicy | None = None,
         seed: int = 0,
+        records: list[dict] | None = None,
     ):
+        """records: the chunk records ({id, title, text, entities}) for the retriever.
+        Without them, every context is sampled at random (the v2 behavior)."""
         self.tok, self.kb, self.rows, self.chunks = tok, kb, rows, chunks
         self.max_len = max_len
         self.synthetic_projects = synthetic_projects
@@ -101,22 +127,41 @@ class EpochBuilder:
         self.policy = policy or ContextPolicy()
         self.rng = random.Random(seed)
         self.skipped = 0
+        self.records = records or []
+        # Real questions never change, so their retrieval context is computed once.
+        retriever = TfidfRetriever(self.records) if self.records else None
+        self.retrieved = [
+            retrieved_context(retriever, r["question"], r["gold_chunks"], self.policy.max_chunks) if retriever else None
+            for r in rows
+        ]
+
+    def _context(self, gold, chunks, retrieved) -> list[str]:
+        if retrieved is not None and self.rng.random() < self.policy.retrieval_prob:
+            return list(retrieved)
+        return sample_context(gold, chunks, self.rng, self.policy)
 
     def build(self) -> list[Encoded]:
         out: list[Encoded] = []
-        for row in self.rows:
-            ids = sample_context(row["gold_chunks"], self.chunks, self.rng, self.policy)
+        for row, retrieved in zip(self.rows, self.retrieved):
+            ids = self._context(row["gold_chunks"], self.chunks, retrieved)
             self._add(out, ids, row["gold_chunks"], self.chunks, row["question"], row["answer"])
 
         if self.synthetic_projects:
-            examples, fake_chunks = synthetic_examples(self.kb, self.synthetic_projects, self.rng, self.banned_tech)
+            examples, fake = synthetic_examples(self.kb, self.synthetic_projects, self.rng, self.banned_tech)
             # Refusals about invented technologies/projects: about 1 per 2 fake projects' worth of questions.
             examples += synthetic_refusals(self.kb, self.rng, n_tech=2 * self.synthetic_projects,
                                            n_projects=self.synthetic_projects, banned_tech=self.banned_tech)
-            # Distractors can be real chunks or fake ones.
-            pool = {**self.chunks, **fake_chunks}
+            # Distractors can be real chunks or fake ones; the retriever indexes both.
+            pool = {**self.chunks, **{cid: c.text for cid, c in fake.items()}}
+            retriever = None
+            if self.records:
+                fake_records = [{"id": c.id, "title": c.title, "text": c.text, "entities": c.entities}
+                                for c in fake.values()]
+                retriever = TfidfRetriever(self.records + fake_records)
             for ex in examples:
-                ids = sample_context(ex.gold_chunks, pool, self.rng, self.policy)
+                retrieved = (retrieved_context(retriever, ex.question, ex.gold_chunks, self.policy.max_chunks)
+                             if retriever else None)
+                ids = self._context(ex.gold_chunks, pool, retrieved)
                 self._add(out, ids, ex.gold_chunks, pool, ex.question, ex.answer)
 
         self.rng.shuffle(out)
@@ -131,14 +176,24 @@ class EpochBuilder:
 
 
 def eval_examples(
-    tok: BPETokenizer, rows: list[dict], chunks: dict[str, str], max_len: int, seed: int = 1234
+    tok: BPETokenizer, rows: list[dict], chunks: dict[str, str], max_len: int, seed: int = 1234,
+    records: list[dict] | None = None,
 ) -> list[tuple[dict, list[str], Encoded]]:
-    """Fixed contexts for dev/test (same seed every time), so scores are comparable across runs."""
+    """Fixed contexts for dev/test, so scores are comparable across runs.
+
+    With `records`, contexts come from the retriever exactly as in the pipeline
+    (v3: dev scores during training then predict pipeline accuracy). Without them,
+    v2's seeded random contexts.
+    """
     rng = random.Random(seed)
     policy = ContextPolicy()
+    retriever = TfidfRetriever(records) if records else None
     out = []
     for row in rows:
-        ids = sample_context(row["gold_chunks"], chunks, rng, policy)
+        if retriever:
+            ids = [h.chunk_id for h in select_hits(retriever.search(row["question"], k=policy.max_chunks))]
+        else:
+            ids = sample_context(row["gold_chunks"], chunks, rng, policy)
         fitted = fit_example(tok, ids, row["gold_chunks"], chunks, row["question"], row["answer"], max_len)
         if fitted is not None:
             enc, used = fitted

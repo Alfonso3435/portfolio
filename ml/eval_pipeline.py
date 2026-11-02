@@ -9,7 +9,7 @@ numbers aren't inflated by choices we made while looking at them.
 
 Every question ends in one of these outcomes:
     answerable questions (they have a gold chunk)
-        correct     exact match with the reference answer
+        correct     exact match with the reference answer (F1 and key facts: see metrics.py)
         safe miss   refused or fell back: unhelpful, but honest
         wrong       stated something that isn't the reference answer  ← what we minimize
     questions it should refuse (unknown, private, off-topic)
@@ -76,12 +76,14 @@ def run_pipeline(args, rows: list[dict]) -> None:
     from askalfonso.inference import normalize
     from askalfonso.pipeline import AskAlfonso, PipelineConfig
 
-    bot = AskAlfonso.from_files(args.checkpoint, args.data, device=args.device)
+    from askalfonso.metrics import score
+
+    bot = AskAlfonso.from_files(args.checkpoint, args.data, device=args.device, chunks_file=args.chunks)
     answerable = [r for r in rows if r["gold_chunks"]]
     refuse = [r for r in rows if not r["gold_chunks"]]
     print(f"\nPipeline on {len(rows)} {args.split} questions "
           f"({len(answerable)} answerable, {len(refuse)} to refuse or greet)\n")
-    header = (f"{'setting':22s} {'correct':>8s} {'safe miss':>10s} {'wrong':>7s} │ "
+    header = (f"{'setting':22s} {'correct':>8s} {'safe miss':>10s} {'wrong':>7s} {'F1':>6s} {'facts':>6s} │ "
               f"{'refused ok':>10s} {'halluc.':>8s} │ {'overall':>8s} {'s/q':>6s}")
     print(header)
     print("─" * len(header))
@@ -99,7 +101,11 @@ def run_pipeline(args, rows: list[dict]) -> None:
         r = Counter(o for row, _, o in out if not row["gold_chunks"])
         total = sum(o == "correct" for _, _, o in out)
         na, nr = len(answerable), len(refuse)
-        print(f"{name:22s} {a['correct'] / na:8.1%} {a['safe_miss'] / na:10.1%} {a['wrong'] / na:7.1%} │ "
+        soft = [score(reply.answer, row["answer"]) for row, reply, _ in out if row["gold_chunks"]]
+        f1 = sum(x["f1"] for x in soft) / na
+        facts = sum(x["facts"] for x in soft) / na
+        print(f"{name:22s} {a['correct'] / na:8.1%} {a['safe_miss'] / na:10.1%} {a['wrong'] / na:7.1%} "
+              f"{f1:6.1%} {facts:6.1%} │ "
               f"{r['correct'] / nr:10.1%} {r['wrong'] / nr:8.1%} │ {total / len(rows):8.1%} {per_q:6.2f}")
         details[name] = out
 
@@ -135,9 +141,11 @@ def main() -> None:
     parser.add_argument("--retrieval-only", action="store_true")
     parser.add_argument("--show-errors", action="store_true")
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--chunks", type=Path, help="chunks file to use instead of data/chunks.jsonl "
+                        "(e.g. the v2 format, to evaluate the v2 model fairly)")
     args = parser.parse_args()
 
-    chunks = load_rows(args.data / "chunks.jsonl")
+    chunks = load_rows(args.chunks or args.data / "chunks.jsonl")
     rows = load_rows(args.data / "qa" / f"{args.split}.jsonl")
     if args.split == "test":
         print("Note: the test split is for the final evaluation (Phase 6). Don't tune on it.\n")

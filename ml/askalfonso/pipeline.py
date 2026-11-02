@@ -23,15 +23,15 @@ from .guardrails import check_answer, is_greeting, is_private, is_refusal
 from .inference import generate_answer, load_checkpoint
 from .knowledge import SITE, Knowledge
 from .prompt import build_prompt
-from .retrieval import Hit, TfidfRetriever
+from .retrieval import MAX_CHUNKS, RELATIVE, THRESHOLD, Hit, TfidfRetriever, select_hits
 from .training_data import CONTEXT_SEPARATOR
 
 
 @dataclass
 class PipelineConfig:
-    threshold: float = 0.10  # τ: minimum retrieval score for a chunk to be shown to the model
-    relative: float = 0.5  # a 2nd chunk must also score ≥ relative × the top score
-    max_chunks: int = 3  # training contexts held up to 3 chunks (e.g. all awards for "What has he won?")
+    threshold: float = THRESHOLD  # τ: minimum retrieval score for a chunk to be shown to the model
+    relative: float = RELATIVE  # extra chunks must also score ≥ relative × the top score
+    max_chunks: int = MAX_CHUNKS  # e.g. all award chunks for "What has he won?"
     max_new_tokens: int = 120
     guards: bool = True  # False = retrieval + model only (for measuring what the guardrails add)
 
@@ -65,9 +65,12 @@ class AskAlfonso:
 
     @classmethod
     def from_files(cls, checkpoint: Path, data_dir: Path, device: str = "cpu",
-                   config: PipelineConfig | None = None) -> "AskAlfonso":
+                   config: PipelineConfig | None = None, chunks_file: Path | None = None) -> "AskAlfonso":
+        """chunks_file overrides data_dir/chunks.jsonl (e.g. to run an older model on the
+        chunk format it was trained with)."""
         model, tok, _ = load_checkpoint(checkpoint, device)
-        chunks = [json.loads(line) for line in (data_dir / "chunks.jsonl").open(encoding="utf-8")]
+        path = chunks_file or data_dir / "chunks.jsonl"
+        chunks = [json.loads(line) for line in path.open(encoding="utf-8")]
         kb = Knowledge.load(data_dir / "knowledge.json")
         return cls(model, tok, chunks, email=kb.email, name=kb.name,
                    assistant=kb.profile.get("assistantName", "Ask Alfonso"), config=config,
@@ -77,10 +80,7 @@ class AskAlfonso:
     def retrieve(self, question: str) -> tuple[list[Hit], list[Hit]]:
         """(all top hits for debugging, the hits that pass the confidence threshold)."""
         hits = self.retriever.search(question, k=max(3, self.cfg.max_chunks))
-        if not hits or hits[0].score < self.cfg.threshold:
-            return hits, []
-        floor = max(self.cfg.threshold, self.cfg.relative * hits[0].score)
-        return hits, [h for h in hits if h.score >= floor][: self.cfg.max_chunks]
+        return hits, select_hits(hits, self.cfg.threshold, self.cfg.relative, self.cfg.max_chunks)
 
     def fit_context(self, kept: list[Hit], question: str) -> list[Hit]:
         """Drop the weakest chunk until the prompt leaves room for the answer."""

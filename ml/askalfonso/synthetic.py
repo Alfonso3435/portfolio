@@ -169,14 +169,16 @@ def fake_knowledge(real: Knowledge, n_projects: int, rng: random.Random, banned_
 
 def synthetic_examples(
     real: Knowledge, n_projects: int, rng: random.Random, banned_tech: set[str], per_intent: int = 2
-) -> tuple[list[QA], dict[str, str]]:
-    """Fresh fake projects → (Q&A using train templates only, {chunk_id: text}).
+) -> tuple[list[QA], dict[str, Chunk]]:
+    """Fresh fake projects → (Q&A using train templates only, {chunk_id: Chunk}).
 
     Keeps `per_intent` random phrasings per (intent, project), so synthetic data
     stays a minority next to the real examples.
     """
     kb = fake_knowledge(real, n_projects, rng, banned_tech)
     chunks: list[Chunk] = kb._project_chunks()
+    for chunk in chunks:  # technology entities, as real chunks have, so the retriever treats them alike
+        chunk.entities += [t for t in kb.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
     gen = QAGenerator(kb)
     gen._projects()
     gen._skills()
@@ -189,7 +191,7 @@ def synthetic_examples(
         examples += rng.sample(group, min(per_intent, len(group)))
     for ex in examples:
         ex.id = f"synthetic:{ex.id}"
-    return examples, {c.id: c.text for c in chunks}
+    return examples, {c.id: c for c in chunks}
 
 
 def invented_tech(rng: random.Random) -> str:

@@ -138,3 +138,18 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(importlib.util.find_spec("torch") is None, "PyTorch is not installed")
+class MetricTests(unittest.TestCase):
+    def test_scores(self):
+        from askalfonso.metrics import key_facts, score, token_f1
+
+        ref = "Yes. Alfonso has used ESP32 in Ambient-Detectors."
+        self.assertEqual(score(ref, ref), {"em": 1.0, "f1": 1.0, "facts": 1.0})
+        near = "Yes. Alfonso has used ESP32 / Arduino in Ambient-Detectors."
+        self.assertEqual(score(near, ref)["em"], 0.0)
+        self.assertTrue(key_facts(near, ref))  # every fact is there
+        self.assertGreater(token_f1(near, ref), 0.8)
+        self.assertFalse(key_facts("Yes. Alfonso has used ESP32 in SkySAR.", ref))
+        self.assertEqual(token_f1("totally different", ref), 0.0)

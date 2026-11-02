@@ -16,6 +16,9 @@ Training recipe (Improving Deep Neural Networks, applied):
   • gradient clipping, dropout
   • early stopping on dev exact-match accuracy; the best checkpoint is kept
 
+Since v3, training and dev contexts come from the TF-IDF retriever, as in the pipeline
+(see askalfonso/training_data.py), and dev also reports token F1 and key-facts accuracy.
+
 The test split is never touched here. It's reserved for the final evaluation (Phase 6).
 
 Outputs (ml/checkpoints/<run>/):
@@ -40,6 +43,7 @@ import torch
 
 from askalfonso.data import collate, pad_id
 from askalfonso.inference import answer, normalize, pick_device, save_checkpoint, set_seed
+from askalfonso.metrics import score
 from askalfonso.knowledge import Knowledge
 from askalfonso.model import GPT, GPTConfig
 from askalfonso.tokenizer import BPETokenizer
@@ -125,17 +129,20 @@ def dev_loss(model: GPT, batches: list[tuple[torch.Tensor, torch.Tensor]], devic
 
 
 @torch.no_grad()
-def dev_exact_match(model, tok, items, chunks) -> tuple[float, dict[str, float], list[tuple[dict, str]]]:
+def dev_exact_match(model, tok, items, chunks) -> tuple[dict[str, float], dict[str, float], list[tuple[dict, str]]]:
+    """Generates an answer for each dev item. Returns ({em, f1, facts}, EM by question type, answers)."""
     model.eval()
-    results, by_type = [], {}
+    results, by_type, totals = [], {}, {"em": 0.0, "f1": 0.0, "facts": 0.0}
     for row, ids, _ in items:
         pred = answer(model, tok, build_context(ids, chunks), row["question"])
-        ok = normalize(pred) == normalize(row["answer"])
+        s = score(pred, row["answer"])
+        for k in totals:
+            totals[k] += s[k]
         results.append((row, pred))
-        by_type.setdefault(row["type"], []).append(ok)
+        by_type.setdefault(row["type"], []).append(s["em"])
     model.train()
-    overall = sum(normalize(p) == normalize(r["answer"]) for r, p in results) / max(len(results), 1)
-    return overall, {t: sum(v) / len(v) for t, v in sorted(by_type.items())}, results
+    n = max(len(results), 1)
+    return {k: v / n for k, v in totals.items()}, {t: sum(v) / len(v) for t, v in sorted(by_type.items())}, results
 
 
 def pretrain(model, tok, args, device, optimizer, log) -> None:
@@ -183,7 +190,8 @@ def main() -> int:
 
     tok = BPETokenizer.load(tok_path)
     kb = Knowledge.load(DATA_DIR / "knowledge.json")
-    chunks = {c["id"]: c["text"] for c in load_jsonl(DATA_DIR / "chunks.jsonl")}
+    records = load_jsonl(DATA_DIR / "chunks.jsonl")  # {id, title, text, entities}, for the retriever
+    chunks = {c["id"]: c["text"] for c in records}
     train_rows = load_jsonl(DATA_DIR / "qa" / "train.jsonl")
     dev_rows = load_jsonl(DATA_DIR / "qa" / "dev.jsonl")
     test_rows = load_jsonl(DATA_DIR / "qa" / "test.jsonl")
@@ -202,8 +210,8 @@ def main() -> int:
         optimizer = make_optimizer(model, args, device)  # fresh optimizer state for stage B
 
     builder = EpochBuilder(tok, kb, train_rows, chunks, cfg.block_size, args.synthetic_projects,
-                           held_out_tech, seed=args.seed)
-    dev_items = eval_examples(tok, dev_rows, chunks, cfg.block_size)
+                           held_out_tech, seed=args.seed, records=records)
+    dev_items = eval_examples(tok, dev_rows, chunks, cfg.block_size, records=records)
     dev_batches = [collate([e for _, _, e in dev_items[i : i + args.batch_size]], pad_id(tok))
                    for i in range(0, len(dev_items), args.batch_size)]
     # A fixed random subset for exact match (generating answers is slower than a loss pass).
@@ -245,10 +253,12 @@ def main() -> int:
 
         # Exact match needs real generation (slow), so it runs every few epochs and on the last one.
         if epoch % args.eval_every == 0 or epoch == args.epochs:
-            em, em_by_type, _ = dev_exact_match(model, tok, em_items, chunks)
-            record |= {"dev_em": em, "dev_em_by_type": em_by_type}
+            scores, em_by_type, _ = dev_exact_match(model, tok, em_items, chunks)
+            em = scores["em"]
+            record |= {"dev_em": em, "dev_f1": scores["f1"], "dev_facts": scores["facts"], "dev_em_by_type": em_by_type}
             types = " ".join(f"{t}={v:.0%}" for t, v in em_by_type.items())
-            print(f"{line} · dev EM {em:.1%} · {elapsed / 60:.1f} min\n          {types}")
+            print(f"{line} · dev EM {em:.1%} · F1 {scores['f1']:.1%} · facts {scores['facts']:.1%} · "
+                  f"{elapsed / 60:.1f} min\n          {types}")
             improved = em > best["dev_em"] or (em == best["dev_em"] and d_loss < best["dev_loss"])
             if improved:
                 best = {"dev_em": em, "dev_loss": d_loss, "epoch": epoch, "step": step}

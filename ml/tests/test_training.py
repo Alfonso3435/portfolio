@@ -51,6 +51,42 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(fitted[1], ["gold"])
 
 
+class RetrievalContextTests(unittest.TestCase):
+    RECORDS = [
+        {"id": "project/zaptap", "title": "ZapTap", "text": "ZapTap sells NFC cards built with Next.js.",
+         "entities": ["ZapTap", "Next.js"]},
+        {"id": "experience/zaptap", "title": "Founder at ZapTap", "text": "ZapTap is a business. Founder.",
+         "entities": ["ZapTap"]},
+        {"id": "project/skysar", "title": "SkySAR", "text": "SkySAR finds people from drone footage.",
+         "entities": ["SkySAR"]},
+        {"id": "skills/web", "title": "Full-stack", "text": "Next.js (used in ZapTap).", "entities": ["Next.js"]},
+    ]
+
+    def setUp(self):
+        from askalfonso.retrieval import TfidfRetriever
+
+        self.r = TfidfRetriever(self.RECORDS)
+
+    def test_uses_what_the_retriever_selects(self):
+        from askalfonso.training_data import retrieved_context
+
+        ids = retrieved_context(self.r, "What is ZapTap?", ["project/zaptap"])
+        self.assertEqual(ids[0], "project/zaptap")
+        self.assertIn("experience/zaptap", ids)  # a *related* distractor, as at inference
+        self.assertNotIn("project/skysar", ids)
+
+    def test_missing_gold_is_added(self):
+        from askalfonso.training_data import retrieved_context
+
+        self.assertEqual(retrieved_context(self.r, "What is ZapTap?", ["project/skysar"], max_chunks=2)[-1],
+                         "project/skysar")
+
+    def test_refusal_gets_empty_context(self):
+        from askalfonso.training_data import retrieved_context
+
+        self.assertEqual(retrieved_context(self.r, "Does he know Haskell?", []), [])
+
+
 class SyntheticTests(unittest.TestCase):
     def setUp(self):
         self.examples, self.chunks = synthetic_examples(tiny_knowledge(), 8, random.Random(3), banned_tech={"angular"})
@@ -60,14 +96,14 @@ class SyntheticTests(unittest.TestCase):
         self.assertTrue(all(ex.split == "train" for ex in self.examples))
 
     def test_banned_technologies_never_appear(self):
-        self.assertTrue(all("Angular" not in text for text in self.chunks.values()))
+        self.assertTrue(all("Angular" not in c.text for c in self.chunks.values()))
 
     def test_answers_are_grounded_in_their_chunks(self):
         # Every technology named in a stack answer must appear in the gold chunk the model will read.
         for ex in self.examples:
             if ex.intent != "project.stack":
                 continue
-            context = " ".join(self.chunks[c] for c in ex.gold_chunks)
+            context = " ".join(self.chunks[c].text for c in ex.gold_chunks)
             for tech in TECH_POOL:
                 if f" {tech}," in f" {ex.answer}" or f" {tech}." in ex.answer:
                     self.assertIn(tech, context)
@@ -96,6 +132,26 @@ class DedupeTests(unittest.TestCase):
         a = QA("1", "x", "fact", "What is ZapTap?", "first", [], "train")
         b = QA("2", "y", "fact", "what is zaptap", "second", [], "train")
         self.assertEqual([e.answer for e in dedupe([a, b])], ["first"])
+
+    def test_held_out_question_beats_train_duplicate(self):
+        # A new training phrasing must never remove a dev/test question.
+        from askalfonso.qa import QA, dedupe
+
+        train = QA("1", "x", "fact", "How did ZapTap turn out?", "a", [], "train")
+        dev = QA("2", "x", "fact", "how did zaptap turn out", "a", [], "dev")
+        self.assertEqual([e.split for e in dedupe([train, dev])], ["dev"])
+
+    def test_casual_variants_depend_only_on_the_question(self):
+        from askalfonso.qa import QA, add_casual_variants
+
+        def make(extra: int) -> list[QA]:
+            return [QA(str(i), "x", "fact", f"Question number {i}?", "a", [], "train") for i in range(extra)] + [
+                QA("d", "x", "fact", f"Dev question {i}?", "a", [], "dev") for i in range(40)]
+
+        small, big = make(10), make(500)
+        add_casual_variants(small)
+        add_casual_variants(big)
+        self.assertEqual([e.question for e in small[-40:]], [e.question for e in big[-40:]])
 
 
 class ScheduleTests(unittest.TestCase):

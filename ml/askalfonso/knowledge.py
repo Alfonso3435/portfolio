@@ -120,10 +120,9 @@ class Knowledge:
         """chunk id -> facts the model may state about that chunk's project that the chunk
         text itself doesn't spell out (its award, links and case-study URL).
 
-        The model learned these from the Q&A answers, not from the chunks, so the
-        guardrails need them to recognize a correct link or award as grounded. They are
-        *not* added to the chunk text: the model was trained on the current format, and
-        changing it without retraining hurts accuracy badly (see ml/README.md, Phase 5).
+        Since v3 these facts are also in the chunk text. They're kept here so a model
+        trained before v3 (whose chunks lacked them) still passes the grounding check
+        for a correct link or award — see ml/README.md, Phase 5.
         """
         facts = {}
         for proj in self.projects:
@@ -231,6 +230,14 @@ class Knowledge:
             parts.append(f"Stack: {join_list(proj['stack'])}.")
             if proj.get("results"):
                 parts.append("Results: " + " ".join(ensure_period(r) for r in proj["results"]))
+            # v3: the award and links live in the project's own chunk, so "Did X win
+            # anything?" and "Is there a demo of X?" can be answered by reading it.
+            award = self.award_for(proj)
+            if award:
+                parts.append(f"Award: {award['placement']} at {award['event']} ({award['year']}).")
+            links = [f"{LINK_LABELS[k]}: {url}" for k, url in proj.get("links", {}).items() if url and k in LINK_LABELS]
+            links.append(f"Case study: {SITE}/projects/{proj['slug']}")
+            parts.append("Links: " + "; ".join(links) + ".")
             if proj.get("year"):
                 parts.append(f"Year: {proj['year']}.")
             if proj["status"] == "in-progress":

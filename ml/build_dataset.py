@@ -79,7 +79,7 @@ def main() -> int:
     kb = Knowledge.load(args.knowledge)
     chunks = [chunk_to_dict(c) for c in kb.chunks()]
     qa = QAGenerator(kb).generate()
-    add_casual_variants(qa, seed=args.seed)
+    add_casual_variants(qa)
     examples = [to_record(ex) for ex in qa]
 
     problems = validate(chunks, examples)
