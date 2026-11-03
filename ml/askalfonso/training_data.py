@@ -118,7 +118,7 @@ class EpochBuilder:
         seed: int = 0,
         records: list[dict] | None = None,
     ):
-        """records: the chunk records ({id, title, text, entities}) for the retriever.
+        """records: the chunk records ({id, title, text, entities, techs}) for the retriever.
         Without them, every context is sampled at random (the v2 behavior)."""
         self.tok, self.kb, self.rows, self.chunks = tok, kb, rows, chunks
         self.max_len = max_len
@@ -155,7 +155,8 @@ class EpochBuilder:
             pool = {**self.chunks, **{cid: c.text for cid, c in fake.items()}}
             retriever = None
             if self.records:
-                fake_records = [{"id": c.id, "title": c.title, "text": c.text, "entities": c.entities}
+                fake_records = [{"id": c.id, "title": c.title, "text": c.text, "entities": c.entities,
+                                 "techs": c.techs}
                                 for c in fake.values()]
                 retriever = TfidfRetriever(self.records + fake_records)
             for ex in examples:

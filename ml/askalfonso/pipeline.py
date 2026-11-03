@@ -65,7 +65,7 @@ class AskAlfonso:
         # "education" don't count). A fact may only mention the ones in its context.
         # Entities only, not chunk titles: a title like "Founder at ZapTap" is a label we
         # wrote, not a name, and never appears in the chunk text.
-        self.known_names = sorted({e for c in chunks for e in c.get("entities", [])
+        self.known_names = sorted({e for c in chunks for e in [*c.get("entities", []), *c.get("techs", [])]
                                    if any(ch.isupper() for ch in e)}, key=len, reverse=True)
         self._cache: dict[tuple[str, str], tuple[str, bool]] = {}
 

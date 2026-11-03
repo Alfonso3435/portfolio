@@ -147,7 +147,8 @@ The test split is never used during training; it's reserved for Phase 6.
 | v1 | Baseline: 2–3 phrasings per question type | 99% | 34% |
 | v2 | 3× more training phrasings; endless invented unknowns; dedupe | 100% | 63% |
 | v3 | Retrieval-style contexts; award + links in project chunks; ~1.7× more training questions; WikiText-2 pretraining | 100% | 68.7% (retrieved contexts) |
-| v4 | Fixed reference answers; question openers spread across intents; near-copies of dev/test phrasings removed | _pending_ | _pending_ |
+| v4 | Fixed reference answers; question openers spread across intents; near-copies of dev/test phrasings removed | 100% | 72.7% (retrieved contexts) |
+| v5 | 3× bigger model; ~25× more pretraining (WikiText-103); two fine-tuning learning rates; retrieval tech bonus | _pending_ | _pending_ |
 
 Dev EM from v3 on is measured on **retrieved** contexts (as in the pipeline), so it isn't
 directly comparable with v1/v2's random contexts. The fair comparison is the Phase 5
@@ -316,3 +317,42 @@ and more epochs wouldn't close it. What was left:
 
 v4 is the last training round before the final evaluation. Because the openers and fixes came
 from reading dev errors, dev is now optimistic; the untouched test set decides (Phase 6).
+
+### v4 results and error analysis
+
+Full pipeline on dev, τ = 0.10 (all on v4's corrected reference answers):
+
+| | v3 | v4 | v4 + v5 retrieval |
+|---|---|---|---|
+| Answerable: exact match | ~72% | 83.4% | **84.4%** |
+| Answerable: wrong | ~20% | 13.7% | 13.7% |
+| Token F1 / key facts | 83.8% / 81.0% | 87.5% / 85.3% | **88.4% / 86.3%** |
+| Should-refuse questions refused | 95.5% | **100%** | **100%** |
+| Answered with something not in the context | 4.5% | **0%** | **0%** |
+
+The fixes worked: the openers that v3 mapped to links ("Can you explain X?", "Was X recognized
+anywhere?") mostly don't anymore, and no answer to a should-refuse question got through.
+
+**What's left is one kind of error.** Every remaining mistake had the right chunk in its context,
+and they come in blocks: each *unseen phrasing* is either right for every project or wrong for
+every project. "What need does X address?" → overview (7 projects); "Can you explain X?" →
+problem or role (7); "What did Alfonso build in X?" → role (4); "What has he accomplished at
+C?" → dates (4). With 27 held-out phrasings, dev is really measuring ~27 coin flips, each worth
+about 4 points — a noisy number, and the reason test (27 *other* phrasings) is the one to trust.
+
+These aren't fixable with more templates without tuning on dev. They're about word meaning
+("need … address" ≈ "problem … solve"), which comes from reading a lot of language.
+
+**Retrieval regression, fixed without retraining.** Syncing `skills.ts` gave many more project
+chunks technology entities, and "Does he know Streamlit?" boosted six projects as much as the
+skill chunk (ranked 6th). v5 retrieval splits entities into names (+0.6) and technologies (+0.4 on
+skill chunks, +0.25 elsewhere), tuned on *train* questions: dev recall@1 78% → 91%, recall@3 100%.
+
+### v5: what changed
+
+1. **A model 3× bigger** (6 layers, 6 heads, 384-dim, ~12M parameters).
+2. **Much more pretraining:** ~120 MB of WikiText-103 (~50M tokens), 20,000 steps, peak LR 6e-4,
+   resumable every 500 steps, tokens cached. Saved once as `pretrained.pt` and shared.
+3. **Two fine-tuning runs** from the same pretrained weights: LR 5e-4 (gentler, keeps more of the
+   pretraining) and 1e-3 (v1–v4's). The pipeline picks between them, and v4, on dev.
+4. **Mixed precision on the T4** (float16 with loss scaling): tensor cores make it 2–3× faster.

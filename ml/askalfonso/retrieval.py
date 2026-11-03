@@ -118,17 +118,26 @@ def select_hits(hits: list[Hit], threshold: float = THRESHOLD, relative: float =
 
 
 class TfidfRetriever:
-    def __init__(self, chunks: list[dict], title_weight: int = 2, entity_bonus: float = 0.5):
-        """chunks: [{"id", "title", "text", "entities"}]. Titles are repeated to count more.
+    def __init__(self, chunks: list[dict], title_weight: int = 2, entity_bonus: float = 0.6,
+                 skill_tech_bonus: float = 0.4, tech_bonus: float = 0.25):
+        """chunks: [{"id", "title", "text", "entities", "techs"}]. Titles are repeated to count more.
 
         Entity bonus: TF-IDF alone ranked IdentifEye's own chunk 6th for "What need does
         IdentifEye address?", because the skill chunks mention "IdentifEye" many times.
-        If a chunk's entity name (all of its words) appears in the question, it gets
+        If a chunk's own name (all of its words) appears in the question, it gets
         +entity_bonus — the question is clearly *about* that thing.
+
+        Tech bonus (v5): a technology named in the question boosts the chunks that use it,
+        more for a skill chunk (which lists every project using it) than for a single
+        project or role. Before, "Does he know Streamlit?" boosted six project chunks as
+        much as the skill chunk, which then ranked 6th. Bonuses were tuned on *train*
+        questions; dev only reports the result.
         """
         self.chunks = chunks
         self.entity_bonus = entity_bonus
         self.entity_words = [[set(words(e)) for e in c.get("entities", []) if words(e)] for c in chunks]
+        self.tech_words = [[set(words(t)) for t in c.get("techs", []) if words(t)] for c in chunks]
+        self.tech_bonuses = [skill_tech_bonus if c["id"].startswith("skills/") else tech_bonus for c in chunks]
         docs = [terms(" ".join([c["title"]] * title_weight + [c["text"]])) for c in chunks]
         n = len(docs)
         df = Counter(t for doc in docs for t in set(doc))
@@ -144,11 +153,14 @@ class TfidfRetriever:
         q = self._vectorize(Counter(terms(question, expand=True)))
         q_words = set(words(question))
         scored = []
-        for chunk, vec, entities in zip(self.chunks, self.vectors, self.entity_words):
+        for chunk, vec, entities, techs, tech_bonus in zip(self.chunks, self.vectors, self.entity_words,
+                                                            self.tech_words, self.tech_bonuses):
             # Iterate over the (short) query, not the (long) chunk.
             score = sum(w * vec.get(t, 0.0) for t, w in q.items())
             if any(e <= q_words for e in entities):
                 score += self.entity_bonus
+            elif any(t <= q_words for t in techs):
+                score += tech_bonus
             scored.append(Hit(chunk["id"], chunk["title"], score))
         scored.sort(key=lambda h: h.score, reverse=True)
         return scored[:k]
@@ -157,10 +169,11 @@ class TfidfRetriever:
         """Everything the browser needs to run search without Python (Phase 7)."""
         return {
             "entity_bonus": self.entity_bonus,
+            "tech_bonuses": self.tech_bonuses,
             "idf": self.idf,
             "chunks": [
                 {"id": c["id"], "title": c["title"], "text": c["text"], "vector": v,
-                 "entities": [sorted(e) for e in ents]}
-                for c, v, ents in zip(self.chunks, self.vectors, self.entity_words)
+                 "entities": [sorted(e) for e in ents], "techs": [sorted(t) for t in techs]}
+                for c, v, ents, techs in zip(self.chunks, self.vectors, self.entity_words, self.tech_words)
             ],
         }

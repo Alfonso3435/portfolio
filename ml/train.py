@@ -21,8 +21,11 @@ Since v3, training and dev contexts come from the TF-IDF retriever, as in the pi
 
 The test split is never touched here. It's reserved for the final evaluation (Phase 6).
 
-Resuming: with --resume, training continues from <run>/last.pt (saved after every
-epoch) instead of starting over. On Colab, point --checkpoints at Google Drive so a
+Resuming: with --resume, training continues from <run>/last.pt (saved every 500 steps in
+stage A and after every epoch in stage B) instead of starting over.
+
+Sharing stage A (v5): --pretrain-only saves <run>/pretrained.pt and stops; any number of
+stage-B runs can then start from it with --init-from, e.g. to compare learning rates. On Colab, point --checkpoints at Google Drive so a
 disconnected runtime loses at most one epoch.
 
 Outputs (ml/checkpoints/<run>/, or --checkpoints/<run>/):
@@ -84,6 +87,10 @@ def parse_args() -> argparse.Namespace:
     # stage A
     p.add_argument("--pretrain-text", type=Path, nargs="*", default=[])
     p.add_argument("--pretrain-steps", type=int, default=0)
+    p.add_argument("--pretrain-lr", type=float, default=None, help="peak LR for stage A (default: --lr)")
+    p.add_argument("--pretrain-cache", type=Path, help="save/load the tokenized pretraining text here (encoding is slow)")
+    p.add_argument("--pretrain-only", action="store_true", help="run stage A, save <run>/pretrained.pt and stop")
+    p.add_argument("--init-from", type=Path, help="start stage B from a pretrained.pt (skips stage A)")
     # evaluation / early stopping
     p.add_argument("--eval-samples", type=int, default=150, help="dev examples scored by exact match")
     p.add_argument("--eval-every", type=int, default=4, help="score dev exact match every N epochs (it's slow)")
@@ -114,11 +121,35 @@ def make_optimizer(model: GPT, args: argparse.Namespace, device: torch.device) -
     return torch.optim.AdamW(groups, lr=args.lr, betas=(0.9, 0.95), fused=device.type == "cuda")
 
 
+def half_dtype(device: torch.device) -> torch.dtype | None:
+    """Mixed precision: bfloat16 on GPUs built for it (A100, L4: compute capability ≥ 8),
+    float16 on older ones like Colab's T4 (its tensor cores make it 2–3× faster than
+    float32), full precision on CPU."""
+    if device.type != "cuda":
+        return None
+    return torch.bfloat16 if torch.cuda.get_device_capability(device)[0] >= 8 else torch.float16
+
+
 def autocast(device: torch.device):
-    """bfloat16 on GPUs that support it (A100, L4…): faster, same quality. Otherwise full precision."""
-    if device.type == "cuda" and torch.cuda.is_bf16_supported():
-        return torch.autocast("cuda", dtype=torch.bfloat16)
-    return nullcontext()
+    dtype = half_dtype(device)
+    return torch.autocast("cuda", dtype=dtype) if dtype else nullcontext()
+
+
+def make_scaler(device: torch.device) -> torch.amp.GradScaler:
+    """float16 can't represent very small gradients (they underflow to 0), so the loss is
+    multiplied by a large factor before backward() and the gradients divided by it again
+    before the update. bfloat16 has float32's range and doesn't need it; disabled = no-op."""
+    return torch.amp.GradScaler("cuda", enabled=half_dtype(device) == torch.float16)
+
+
+def update(model: GPT, optimizer, scaler, loss: torch.Tensor, clip: float) -> None:
+    """One optimization step: backward, gradient clipping, AdamW update."""
+    optimizer.zero_grad(set_to_none=True)
+    scaler.scale(loss).backward()
+    scaler.unscale_(optimizer)  # clip the real gradients, not the scaled ones
+    torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+    scaler.step(optimizer)  # skipped automatically if the scaled gradients overflowed
+    scaler.update()
 
 
 @torch.no_grad()
@@ -152,30 +183,64 @@ def dev_exact_match(model, tok, items, chunks) -> tuple[dict[str, float], dict[s
     return {k: v / n for k, v in totals.items()}, {t: sum(v) / len(v) for t, v in sorted(by_type.items())}, results
 
 
-def pretrain(model, tok, args, device, optimizer, log) -> None:
-    """Stage A: next-token prediction on random windows of general text (every token is graded)."""
-    text = "\n\n".join(p.read_text(encoding="utf-8") for p in args.pretrain_text)
-    stream = torch.tensor(tok.encode(text), dtype=torch.long)
+def pretrain_stream(tok: BPETokenizer, args: argparse.Namespace) -> torch.Tensor:
+    """The pretraining text as one long tensor of token ids, cached on disk.
+
+    Encoded a block of paragraphs at a time: a Python list of 50M ints would need
+    gigabytes of RAM, an int32 tensor needs 200 MB.
+    """
+    if args.pretrain_cache and args.pretrain_cache.exists():
+        stream = torch.load(args.pretrain_cache)
+        print(f"Loaded {len(stream):,} pretraining tokens from {args.pretrain_cache}")
+        return stream
+    parts: list[torch.Tensor] = []
+    for path in args.pretrain_text:
+        block: list[str] = []
+        size = 0
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                block.append(line)
+                size += len(line)
+                if size > 1_000_000:
+                    parts.append(torch.tensor(tok.encode("".join(block)), dtype=torch.int32))
+                    block, size = [], 0
+                    print(f"  encoded {sum(len(p) for p in parts):,} tokens…", end="\r")
+        if block:
+            parts.append(torch.tensor(tok.encode("".join(block)), dtype=torch.int32))
+    stream = torch.cat(parts)
+    if args.pretrain_cache:
+        args.pretrain_cache.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(stream, args.pretrain_cache)
+    return stream
+
+
+def pretrain(model, tok, args, device, optimizer, scaler, log, save, start_step: int = 0) -> None:
+    """Stage A: next-token prediction on random windows of general text (every token is graded).
+
+    Saves its progress every 500 steps (save(step)), so a long stage A survives a disconnect.
+    """
+    stream = pretrain_stream(tok, args)
     window = args.block_size
-    print(f"Stage A: pretraining on {len(stream):,} tokens for {args.pretrain_steps} steps")
+    print(f"Stage A: pretraining on {len(stream):,} tokens for {args.pretrain_steps} steps"
+          + (f" (resuming at step {start_step})" if start_step else ""))
     if len(stream) <= window + 1:
         raise ValueError("Pretraining text is shorter than one context window.")
+    sched = argparse.Namespace(**{**vars(args), "lr": args.pretrain_lr or args.lr})
     model.train()
-    for step in range(args.pretrain_steps):
+    for step in range(start_step, args.pretrain_steps):
         for group in optimizer.param_groups:
-            group["lr"] = lr_at(step, args.pretrain_steps, args)
+            group["lr"] = lr_at(step, args.pretrain_steps, sched)
         starts = torch.randint(0, len(stream) - window - 1, (args.batch_size,))
-        x = torch.stack([stream[s : s + window] for s in starts]).to(device)
-        y = torch.stack([stream[s + 1 : s + window + 1] for s in starts]).to(device)
+        x = torch.stack([stream[s : s + window] for s in starts]).long().to(device)
+        y = torch.stack([stream[s + 1 : s + window + 1] for s in starts]).long().to(device)
         with autocast(device):
             _, loss = model(x, y)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-        optimizer.step()
+        update(model, optimizer, scaler, loss, args.grad_clip)
         if step % 100 == 0 or step == args.pretrain_steps - 1:
             print(f"  A step {step:>5}  loss {loss.item():.3f}")
             log({"stage": "pretrain", "step": step, "train_loss": loss.item()})
+        if (step + 1) % 500 == 0:
+            save(step + 1)
 
 
 def main() -> int:
@@ -190,6 +255,10 @@ def main() -> int:
     out_dir = args.checkpoints / args.run
     out_dir.mkdir(parents=True, exist_ok=True)
     last_path = out_dir / "last.pt"
+    pretrained_path = out_dir / "pretrained.pt"
+    if args.pretrain_only and args.resume and pretrained_path.exists():
+        print(f"Stage A already finished: {pretrained_path}")
+        return 0
     state = torch.load(last_path, map_location="cpu", weights_only=False) if args.resume and last_path.exists() else None
     # Resuming appends to the metrics log; a fresh run starts it over.
     metrics_file = (out_dir / "metrics.jsonl").open("a" if state else "w", encoding="utf-8")
@@ -213,8 +282,11 @@ def main() -> int:
                     n_head=args.n_head, n_embd=args.n_embd, dropout=args.dropout)
     model = GPT(cfg).to(device)
     optimizer = make_optimizer(model, args, device)
-    print(f"Device {device} · {model.num_params():,} parameters · run '{args.run}'")
+    scaler = make_scaler(device)
+    print(f"Device {device} · {model.num_params():,} parameters · run '{args.run}'"
+          + (f" · mixed precision {half_dtype(device)}" if half_dtype(device) else ""))
 
+    stage = state.get("stage", "finetune") if state else None
     if state and state["tokenizer"] != tok.to_dict():
         print("The tokenizer changed since last.pt was saved (did src/data change?). "
               "Start a new run instead of resuming.", file=sys.stderr)
@@ -224,18 +296,48 @@ def main() -> int:
         """Everything needed to continue exactly where we left off. Written to a temp file
         first, so a disconnect in the middle of saving can't corrupt the previous one."""
         tmp = last_path.with_suffix(".tmp")
-        torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "step": step,
+        torch.save({"stage": "finetune", "model": model.state_dict(), "optimizer": optimizer.state_dict(),
+                    "epoch": epoch, "step": step,
                     "best": best, "stale": stale, "tokenizer": tok.to_dict(), "builder_rng": builder.rng.getstate(),
                     "torch_rng": torch.get_rng_state(),
                     "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None}, tmp)
         tmp.replace(last_path)
 
-    if state:
+    def save_pretrain(step: int) -> None:
+        tmp = last_path.with_suffix(".tmp")
+        torch.save({"stage": "pretrain", "pretrain_step": step, "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(), "tokenizer": tok.to_dict(), "torch_rng": torch.get_rng_state(),
+                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None}, tmp)
+        tmp.replace(last_path)
+
+    if stage == "finetune":
         score = f"best dev EM {state['best']['dev_em']:.1%}" if state["best"]["dev_em"] >= 0 else "no dev score yet"
         print(f"Resuming from {last_path} (finished epoch {state['epoch']}, {score})")
+    elif args.init_from:
+        init = torch.load(args.init_from, map_location="cpu", weights_only=False)
+        if init["config"] != cfg.to_dict():
+            print(f"{args.init_from} has a different model config: {init['config']}", file=sys.stderr)
+            return 1
+        model.load_state_dict(init["model"])
+        print(f"Stage A skipped: starting from the pretrained weights in {args.init_from}")
     elif args.pretrain_text and args.pretrain_steps:
-        pretrain(model, tok, args, device, optimizer, log)
+        start_step = 0
+        if stage == "pretrain":
+            model.load_state_dict(state["model"])
+            optimizer.load_state_dict(state["optimizer"])
+            torch.set_rng_state(state["torch_rng"])
+            if state["cuda_rng"] is not None and device.type == "cuda":
+                torch.cuda.set_rng_state_all(state["cuda_rng"])
+            start_step = state["pretrain_step"]
+        pretrain(model, tok, args, device, optimizer, scaler, log, save_pretrain, start_step)
+        torch.save({"model": model.state_dict(), "config": cfg.to_dict()}, pretrained_path)
+        print(f"Stage A done → {pretrained_path}")
+        if args.pretrain_only:
+            last_path.unlink(missing_ok=True)
+            metrics_file.close()
+            return 0
         optimizer = make_optimizer(model, args, device)  # fresh optimizer state for stage B
+    state = state if stage == "finetune" else None  # from here on, `state` means a stage B checkpoint
 
     builder = EpochBuilder(tok, kb, train_rows, chunks, cfg.block_size, args.synthetic_projects,
                            held_out_tech, seed=args.seed, records=records)
@@ -277,10 +379,7 @@ def main() -> int:
                 group["lr"] = lr
             with autocast(device):
                 _, loss = model(x, y)
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-            optimizer.step()
+            update(model, optimizer, scaler, loss, args.grad_clip)
             running.append(loss.item())
             step += 1
 

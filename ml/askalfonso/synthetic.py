@@ -178,7 +178,7 @@ def synthetic_examples(
     kb = fake_knowledge(real, n_projects, rng, banned_tech)
     chunks: list[Chunk] = kb._project_chunks()
     for chunk in chunks:  # technology entities, as real chunks have, so the retriever treats them alike
-        chunk.entities += [t for t in kb.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
+        chunk.techs = [t for t in kb.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
     gen = QAGenerator(kb)
     gen._projects()
     gen._skills()

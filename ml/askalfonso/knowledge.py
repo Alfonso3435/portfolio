@@ -37,6 +37,10 @@ class Chunk:
     # Names a visitor would type to mean this chunk ("IdentifEye", "Answr", "HackMX").
     # The retriever boosts a chunk whose entity name appears in the question.
     entities: list[str] = field(default_factory=list)
+    # Technologies the chunk mentions ("PyTorch", "Next.js"). Kept apart from `entities`
+    # because they're weaker evidence: "Does he know Streamlit?" is about the skill, not
+    # about each of the six projects that happen to use it (v5).
+    techs: list[str] = field(default_factory=list)
 
 
 class Knowledge:
@@ -180,7 +184,7 @@ class Knowledge:
             self._certifications_chunk(),
         ]
         for chunk in chunks:
-            chunk.entities += [t for t in self.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
+            chunk.techs = [t for t in self.chunk_techs.get(chunk.id, []) if t not in chunk.entities]
         return chunks
 
     def _profile_chunks(self) -> list[Chunk]:
