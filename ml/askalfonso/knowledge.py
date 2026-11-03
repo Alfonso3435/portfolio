@@ -134,6 +134,21 @@ class Knowledge:
             facts[f"project/{proj['slug']}"] = " ".join(parts)
         return facts
 
+    def skill_mismatches(self) -> list[str]:
+        """Projects whose stack uses a skill that skills.ts doesn't link to them.
+
+        The site's skills section and the chatbot both read skills.ts, so a missing slug
+        means a recruiter sees "PyTorch — used in PDF Chatbot" when Ask Alfonso uses it too.
+        """
+        out = []
+        for group in self.skill_groups:
+            for skill in group["skills"]:
+                aliases = set(tech_aliases(skill["name"]))
+                for project in self.projects:
+                    if aliases & set(project["stack"]) and project["slug"] not in skill["projectSlugs"]:
+                        out.append(f"{project['slug']} uses {skill['name']} (stack) but skills.ts doesn't link it")
+        return out
+
     def skill_group_chunk(self, tech: str) -> str | None:
         for group in self.skill_groups:
             if any(s["name"] == tech for s in group["skills"]):

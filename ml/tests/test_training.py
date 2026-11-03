@@ -166,5 +166,62 @@ class ScheduleTests(unittest.TestCase):
         self.assertAlmostEqual(lr_at(100, 100, args), 1e-4)  # ends at min_lr
 
 
+
+class TemplateLeakTests(unittest.TestCase):
+    def test_near_duplicates_of_held_out_phrasings_are_dropped(self):
+        from askalfonso.qa import near_duplicate, train_only
+
+        self.assertTrue(near_duplicate("How big was the {t} team?", "How big was the team for {t}?"))
+        self.assertFalse(near_duplicate("Can you tell me about {t}?", "Can you explain {t}?"))
+        kept = train_only(["How big was the {t} team?", "Who did he build {t} with?"],
+                          ["Did he work alone on {t}?", "How big was the team for {t}?"])
+        self.assertEqual(kept, ["Who did he build {t} with?"])
+
+
+class ReferenceAnswerTests(unittest.TestCase):
+    """v4 fixes to the answers the model learns from."""
+
+    def kb(self):
+        return Knowledge({
+            "schemaVersion": 1,
+            "profile": {"shortName": "Alfonso", "email": "a@b.c", "assistantName": "Ask Alfonso"},
+            "experience": [{"id": "zaptap", "company": "ZapTap", "role": "Founder", "summary": "shop.",
+                            "dates": {"start": "2026-08"}, "highlights": [], "stack": ["React"]}],
+            "projects": [
+                {"slug": p, "title": t, "pitch": "x.", "problem": "y.", "built": ["z"], "role": "Dev",
+                 "stack": ["React"], "status": "shipped", "categories": [], "featured": False, "links": {},
+                 "results": [], "awardId": a}
+                for p, t, a in [("zaptap", "ZapTap", None), ("one", "One", None), ("two", "Two", None),
+                                ("three", "Three", "mlv"), ("four", "Four", "hack")]],
+            "awards": [
+                {"id": "mlv", "kind": "recognition", "placement": "Presenter", "title": "MLV",
+                 "event": "Making Learning Visible (Dec 2025)", "year": 2025, "organizer": "BC",
+                 "projectSlug": "three", "summary": "Presented it."},
+                {"id": "hack", "kind": "win", "placement": "1st Place", "title": "H", "event": "HackMX",
+                 "year": 2025, "organizer": "Tec", "projectSlug": "four", "summary": "Won it."}],
+            "skillGroups": [{"name": "Web", "skills": [
+                {"name": "React", "projectSlugs": ["zaptap", "one", "two", "three", "four"]}]}],
+            "certifications": [],
+        })
+
+    def answers(self, intent: str) -> dict[str, str]:
+        from askalfonso.qa import QAGenerator
+
+        gen = QAGenerator(self.kb())
+        gen._projects()
+        gen._skills()
+        return {ex.question: ex.answer for ex in gen.examples if ex.intent == intent}
+
+    def test_skill_answer_lists_every_project_once(self):
+        answer = next(iter(self.answers("skill.has").values()))
+        self.assertEqual(answer, "Yes. Alfonso has used React in ZapTap, One, Two, Three and Four.")
+
+    def test_award_answers(self):
+        got = set(self.answers("project.award").values())
+        self.assertIn("Yes. Four won 1st Place at HackMX (2025).", got)
+        self.assertIn("Yes. Three was featured at Making Learning Visible (Dec 2025), where Alfonso was a presenter.",
+                      got)
+
+
 if __name__ == "__main__":
     unittest.main()

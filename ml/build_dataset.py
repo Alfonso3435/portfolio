@@ -82,6 +82,9 @@ def main() -> int:
     add_casual_variants(qa)
     examples = [to_record(ex) for ex in qa]
 
+    for warning in kb.skill_mismatches():  # not fatal: the data is still consistent, just incomplete
+        print(f"⚠ {warning}", file=sys.stderr)
+
     problems = validate(chunks, examples)
     if problems:
         print(f"✗ {len(problems)} problem(s) found:", file=sys.stderr)

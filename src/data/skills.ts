@@ -7,14 +7,14 @@ export const skillGroups: SkillGroup[] = [
     name: "Machine Learning & Deep Learning",
     skills: [
       { name: "TensorFlow / Keras", projectSlugs: ["ml-playground"] },
-      { name: "scikit-learn", projectSlugs: ["can-ai-spot-a-lie", "identifeye"] },
-      { name: "NumPy", projectSlugs: ["ml-playground", "can-ai-spot-a-lie"] },
+      { name: "scikit-learn", projectSlugs: ["can-ai-spot-a-lie", "identifeye", "ml-playground"] },
+      { name: "NumPy", projectSlugs: ["ml-playground", "can-ai-spot-a-lie", "ask-alfonso"] },
       { name: "Pandas", projectSlugs: ["can-ai-spot-a-lie", "ml-playground", "csv-chatbot"] },
       { name: "Neural networks", projectSlugs: ["ml-playground"] },
       { name: "Recommender systems", projectSlugs: ["ml-playground"] },
-      { name: "NLP (TF-IDF, NLTK)", projectSlugs: ["can-ai-spot-a-lie"] },
+      { name: "NLP (TF-IDF, NLTK)", projectSlugs: ["can-ai-spot-a-lie", "ask-alfonso"] },
       { name: "Computer vision", projectSlugs: ["identifeye", "skysar"] },
-      { name: "PyTorch", projectSlugs: ["pdf-chatbot"] },
+      { name: "PyTorch", projectSlugs: ["pdf-chatbot", "ask-alfonso"] },
     ],
   },
   {
@@ -62,7 +62,20 @@ export const skillGroups: SkillGroup[] = [
   {
     name: "Languages",
     skills: [
-      { name: "Python", projectSlugs: ["can-ai-spot-a-lie", "ml-playground", "identifeye", "skysar", "financeai"] },
+      {
+        name: "Python",
+        projectSlugs: [
+          "can-ai-spot-a-lie",
+          "ml-playground",
+          "identifeye",
+          "skysar",
+          "financeai",
+          "pdf-chatbot",
+          "csv-chatbot",
+          "ambient-detectors",
+          "ask-alfonso",
+        ],
+      },
       { name: "TypeScript / JavaScript", projectSlugs: ["zaptap", "answr", "blockcity"] },
       { name: "C#", projectSlugs: ["samla", "blockcity"] },
       { name: "C / C++", projectSlugs: ["ambient-detectors"] },

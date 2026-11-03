@@ -146,7 +146,8 @@ The test split is never used during training; it's reserved for Phase 6.
 |---|---|---|---|
 | v1 | Baseline: 2–3 phrasings per question type | 99% | 34% |
 | v2 | 3× more training phrasings; endless invented unknowns; dedupe | 100% | 63% |
-| v3 | Retrieval-style contexts; award + links in project chunks; ~1.7× more training questions; WikiText-2 pretraining | _pending_ | _pending_ |
+| v3 | Retrieval-style contexts; award + links in project chunks; ~1.7× more training questions; WikiText-2 pretraining | 100% | 68.7% (retrieved contexts) |
+| v4 | Fixed reference answers; question openers spread across intents; near-copies of dev/test phrasings removed | _pending_ | _pending_ |
 
 Dev EM from v3 on is measured on **retrieved** contexts (as in the pipeline), so it isn't
 directly comparable with v1/v2's random contexts. The fair comparison is the Phase 5
@@ -269,3 +270,49 @@ test set (Phase 6) gives the honest number.
 
 **Baseline to beat** (v2, current dev, its own chunk format, τ = 0.10): answerable 73.9%
 exact / 81.7% F1 / 81.5% key facts; 95.5% of should-refuse questions refused.
+
+### v3 results and error analysis
+
+Full pipeline on dev (τ = 0.10), same questions as the v2 baseline:
+
+| | v2 | v3 |
+|---|---|---|
+| Answerable: exact match | 73.9% | **80.6%** |
+| Answerable: wrong | 22.3% | **14.7%** |
+| Token F1 / key facts | 81.7% / 81.5% | **86.2% / 82.9%** |
+| Skill questions right | 56/76 | **68/76** |
+| Should-refuse questions refused | 95.5% | 95.5% |
+
+Train loss reached ~0.02 while dev loss flattened at ~0.2 from epoch 30: still a variance gap,
+and more epochs wouldn't close it. What was left:
+
+- **Shortcut learning.** Nearly every training question starting with "Can…" asked for links
+  ("Can I try X?"), so "Can you explain X?" got X's links (13 projects); "Was X recognized
+  anywhere?" got links too (9). "What did he do at…" meant role, so "What does Answr do?" got
+  a role. The model keyed on the opener, not the meaning — a dataset bias.
+- **Bugs in the reference answers**, taught in training too: skill answers named only the first
+  3 projects, in an order the model couldn't see; "ZapTap and ZapTap" (project and company);
+  "won Presenter at Making Learning Visible (Dec 2025) (2025)".
+- **A hole in the grounding check:** "Yes. Alfonso has used OpenAI API in PDF Chatbot (RAG) and
+  Ask Alfonso" passed, because "Ask" is a common word and "Alfonso" is always allowed.
+- **Site data:** `skills.ts` didn't link several projects whose stack uses the skill (e.g.
+  PyTorch → Ask Alfonso), so the site and the chatbot under-reported them.
+
+### v4: what changed
+
+1. **Reference answers** (`qa.py`): a skill answer names every project, once, in the order the
+   skill chunk lists them; award wording fixed. Dev/test *questions* are unchanged; their
+   reference answers got the same fixes.
+2. **Openers spread across intents** (`OPENER_TEMPLATES`): "Can you…", "Could you…", "Was…" and
+   "What does…" now appear in most question types, so they no longer predict the answer type.
+3. **Near-copy filter** (`train_only`): a training phrasing whose words overlap a dev/test
+   phrasing of the same intent by Jaccard ≥ 0.6 is dropped ("How big was the {t} team?" vs the
+   test's "How big was the team for {t}?"). It flagged 33 phrasings; the exact copies were
+   already excluded by `dedupe()`, but the near ones (some from v2) had been in training, so
+   v1–v3 dev numbers were a little optimistic. A few semantic near-copies were removed by hand.
+4. **Whole-name grounding** (`guardrails.unsupported_names`): any project, company, school or
+   event named in a factual answer must appear in the context as a whole phrase.
+5. **`skills.ts` synced** with project stacks, and `build_dataset.py` now warns when they drift.
+
+v4 is the last training round before the final evaluation. Because the openers and fixes came
+from reading dev errors, dev is now optimistic; the untouched test set decides (Phase 6).

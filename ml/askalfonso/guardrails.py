@@ -16,6 +16,8 @@ hope it doesn't, we wrap it in checks that are easy to reason about:
                   • grounded?   every name and number in a fact appears in the
                                 context (in a refusal: in the question)
                   • on topic?   "Yes, he has used X" names the X that was asked
+                  • names?      every project/company/school named in a fact is in
+                                the context, as a whole phrase
 
 The grounding check is the important one. "Describe QuantumChess." → "…a project
 called Quirex…" names something that exists nowhere in what the model read, so it
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Iterable
 
 # ── [1] Private topics: refused before the model runs ─────────────────────────────
 # The model was trained to refuse these, but a refusal it *usually* gets right isn't
@@ -157,7 +160,22 @@ def is_repetitive(answer: str, n: int = 4, max_repeats: int = 2) -> bool:
     return False
 
 
-def check_answer(answer: str, finished: bool, context: str, question: str, allowlist: str) -> Check:
+def unsupported_names(answer: str, sources: str, known_names: Iterable[str]) -> list[str]:
+    """Known names (projects, companies, schools, events) that a fact mentions but its
+    sources don't. Checked as whole phrases: the word-level check lets "Ask Alfonso"
+    through because "Ask" is a common word and "Alfonso" is always allowed — v3 said
+    "Yes. Alfonso has used OpenAI API in … Ask Alfonso" with no Ask Alfonso chunk in sight."""
+    low_answer, low_sources = answer.lower(), sources.lower()
+    out = []
+    for name in known_names:
+        pattern = r"(?<![\w])" + re.escape(name.lower()) + r"(?![\w])"
+        if re.search(pattern, low_answer) and not re.search(pattern, low_sources):
+            out.append(name)
+    return out
+
+
+def check_answer(answer: str, finished: bool, context: str, question: str, allowlist: str,
+                 known_names: Iterable[str] = ()) -> Check:
     if not answer:
         return Check(False, "empty")
     if not finished:
@@ -182,4 +200,7 @@ def check_answer(answer: str, finished: bool, context: str, question: str, allow
     # Facts must come from the context, not the question: otherwise "Has he used React
     # Native?" → "Yes. Alfonso has used React Native…" would pass just by echoing it.
     missing = ungrounded_tokens(answer, " ".join([context, allowlist]))
-    return Check(not missing, "ungrounded" if missing else "", tuple(missing))
+    if missing:
+        return Check(False, "ungrounded", tuple(missing))
+    names = unsupported_names(answer, context, known_names)
+    return Check(not names, "unsupported_name" if names else "", tuple(names))

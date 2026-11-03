@@ -24,6 +24,7 @@ How the split works (and why):
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import asdict, dataclass
 from typing import Callable, Iterable
 
@@ -55,6 +56,26 @@ class QA:
 
 
 # ── splitting helpers ────────────────────────────────────────────────────────
+
+
+def _template_words(template: str) -> set[str]:
+    return set(re.sub(r"\{\w+\}", " ", template.lower()).replace("?", " ").replace(".", " ").split())
+
+
+def near_duplicate(a: str, b: str, threshold: float = 0.6) -> bool:
+    """Two phrasings share most of their words (Jaccard similarity ≥ threshold):
+    "How big was the {t} team?" vs "How big was the team for {t}?" → 5/6 = 0.83."""
+    wa, wb = _template_words(a), _template_words(b)
+    return bool(wa | wb) and len(wa & wb) / len(wa | wb) >= threshold
+
+
+def train_only(extras: list[str], held_out: list[str]) -> list[str]:
+    """Extra training phrasings minus near-copies of the dev/test phrasings.
+
+    An exact copy would be caught by dedupe(); a near-copy would slip through and make
+    dev/test easier than they should be — "unseen phrasing" has to mean unseen.
+    """
+    return [t for t in extras if not any(near_duplicate(t, h) for h in held_out)]
 
 
 def split_by_template(index: int, n_templates: int) -> str:
@@ -108,7 +129,8 @@ class QAGenerator:
         gold: Callable[[dict], list[str]],
     ) -> None:
         # Extra phrasings go in front, so the last two templates (dev, test) stay fixed.
-        templates = EXTRA_TRAIN_TEMPLATES.get(intent, []) + templates
+        held_out = templates[-2:] if len(templates) >= 4 else []
+        templates = train_only(EXTRA_TRAIN_TEMPLATES.get(intent, []), held_out) + templates
         for key, values in entities:
             for i, template in enumerate(templates):
                 question = template.format(**values)
@@ -395,9 +417,14 @@ class QAGenerator:
 
         def award(v: dict) -> str:
             a = kb.award_for(v["p"])
-            if a:
-                return f"Yes. {v['t']} won {a['placement']} at {a['event']} ({a['year']})."
-            return f"I don't have any award listed for {v['t']}."
+            if not a:
+                return f"I don't have any award listed for {v['t']}."
+            year = "" if str(a["year"]) in a["event"] else f" ({a['year']})"  # "(Dec 2025) (2025)" → once
+            if a["kind"] == "win":
+                article = "" if a["placement"][:1].isdigit() else "the "
+                return f"Yes. {v['t']} won {article}{a['placement']} at {a['event']}{year}."
+            # Not a win (e.g. selected to present): say what it was, not "won Presenter".
+            return f"Yes. {v['t']} was featured at {a['event']}{year}, where Alfonso was a {a['placement'].lower()}."
 
         self.templated(
             "project.award", "fact",
@@ -440,7 +467,9 @@ class QAGenerator:
             entities,
             lambda v: (
                 f"{ensure_period(as_he_sentence(to_third_person(v['a']['summary'])))} "
-                f"That was at {v['a']['event']} ({v['a']['year']}), organized by {v['a']['organizer']}."
+                f"That was at {v['a']['event']}"
+                f"{'' if str(v['a']['year']) in v['a']['event'] else ' (' + str(v['a']['year']) + ')'}, "
+                f"organized by {v['a']['organizer']}."
             ),
             lambda v: [f"award/{v['a']['id']}"] + ([f"project/{v['a']['projectSlug']}"] if v["a"].get("projectSlug") else []),
         )
@@ -465,7 +494,7 @@ class QAGenerator:
 
     def _skills(self) -> None:
         kb = self.kb
-        templates = EXTRA_TRAIN_TEMPLATES["skill.has"] + SKILL_TEMPLATES
+        templates = skill_train_templates() + SKILL_TEMPLATES[-2:]
 
         def tech_aliases(name: str) -> list[str]:
             base = name.split(" (")[0]
@@ -477,19 +506,35 @@ class QAGenerator:
             names = tech_aliases(tech)
             entities.append((tech, {"name": tech, "alias": names}))
 
+        chunk_text = {c.id: c.text for c in kb._skill_chunks()}  # skill chunks list each skill's projects
+
+        def skill_answer(name: str) -> tuple[str, list[str]]:
+            """v4: name *every* project, once, in the order the skill chunk lists them.
+
+            v1–v3 listed only the first 3 sources, in an order the model couldn't see,
+            and could repeat a name ("ZapTap and ZapTap": the project and the company).
+            Projects come first; a role is only named when no project uses the skill
+            (e.g. Flutter at Fitness Tech).
+            """
+            sources = kb.tech_sources[name]
+            used = [s for s in sources if s[1].startswith("project/")] or sources
+            titles = list(dict.fromkeys(t for t, _ in used))
+            group = kb.skill_group_chunk(name)
+            if not titles:
+                return (f"Yes. {name} comes from his coursework; it isn't featured in a project on this site yet.",
+                        [group] if group else [])
+            answer = f"Yes. Alfonso has used {name} in {join_list(titles)}."
+            if group:
+                # The skill chunk lists the projects; add a source chunk only if it isn't named there.
+                missing = [c for t, c in used if t not in chunk_text.get(group, "")]
+                return answer, [group, *dict.fromkeys(missing)]
+            return answer, list(dict.fromkeys(c for _, c in used))
+
         # Cycle aliases across templates: "Does he know TensorFlow?" / "Has he used Keras?"
         for key, v in entities:
             for i, template in enumerate(templates):
                 alias = v["alias"][i % len(v["alias"])]
-                sources = kb.tech_sources[v["name"]]
-                if sources:
-                    answer = f"Yes. Alfonso has used {v['name']} in {join_list([t for t, _ in sources[:3]])}."
-                else:
-                    answer = f"Yes. {v['name']} comes from his coursework; it isn't featured in a project on this site yet."
-                gold = [c for _, c in sources[:3]]
-                group = kb.skill_group_chunk(v["name"])
-                if group:
-                    gold = [group, *gold]
+                answer, gold = skill_answer(v["name"])
                 self.examples.append(
                     QA(
                         id=f"skill.has:{key}:{i}", intent="skill.has", type="skill",
@@ -625,7 +670,7 @@ PROJECT_UNKNOWN_TEMPLATES = ["What is {n}?", "Tell me about {n}.", "What did he 
 
 def skill_train_templates() -> list[str]:
     """Every skill phrasing except the two that skill.has holds out for dev and test."""
-    return EXTRA_TRAIN_TEMPLATES["skill.has"] + SKILL_TEMPLATES[:-2]
+    return train_only(EXTRA_TRAIN_TEMPLATES["skill.has"], SKILL_TEMPLATES[-2:]) + SKILL_TEMPLATES[:-2]
 
 
 def skill_unknown_templates(split: str) -> list[str]:
@@ -764,44 +809,41 @@ MORE_TRAIN_TEMPLATES: dict[str, list[str]] = {
     "education.current": ["What does he study?", "What school is he at?", "Is he a student?",
                           "What's his major?", "Where is he studying now?", "Is he at the Allen School?",
                           "When does he graduate?", "What university does Alfonso attend?"],
-    "education.gpa": ["What GPA did he have?", "Grades?", "Was he a good student?", "What GPA does Alfonso have?",
+    "education.gpa": ["Grades?", "Was he a good student?", "What GPA does Alfonso have?",
                       "How did he do academically?"],
     "education.before": ["Where did he go before UW?", "Did he study in Mexico?", "Which schools has he attended?",
-                         "What schools did he go to?", "Where did his studies start?",
+                         "Where did his studies start?",
                          "What did he study before the University of Washington?"],
     "education.bellevue": ["Why did he go to Bellevue College?", "What did he do at Bellevue College?",
                            "Tell me about his time at Bellevue College.", "Which classes did he take at Bellevue College?"],
     "education.certifications": ["What certifications does he hold?", "Has he done any Coursera courses?",
                                  "List his certificates.", "What online courses has he finished?",
-                                 "Does he have a deep learning certificate?", "What did he learn on his own?"],
+                                 "What did he learn on his own?"],
     "experience.overview": ["What does {c} do?", "Tell me what {c} is.", "{c}?", "What is {c}, exactly?",
                             "Can you describe {c}?", "Quick summary of {c}?"],
     "experience.role": ["What's his job at {c}?", "His role at {c}?", "What does he do for {c}?",
                         "What position does Alfonso hold at {c}?", "How is he involved in {c}?",
                         "What has he done at {c}?"],
-    "experience.dates": ["When did he join {c}?", "How long has he been at {c}?", "When did his time at {c} start?",
-                         "Start date at {c}?", "Is he still at {c}?"],
+    "experience.dates": ["When did he join {c}?", "How long has he been at {c}?", "Start date at {c}?", "Is he still at {c}?"],
     "experience.stack": ["What tools does he use at {c}?", "What's the tech behind {c}?", "{c} tech stack?",
                          "Which frameworks does he use at {c}?", "What does {c} run on?"],
-    "project.overview": ["What is {t} about?", "Tell me what {t} is.", "{t}?", "Summarize {t}.",
+    "project.overview": ["What is {t} about?", "Tell me what {t} is.", "{t}?",
                          "Quick overview of {t}, please.", "What's the idea behind {t}?",
-                         "Describe the {t} project.", "Walk me through {t}."],
-    "project.built": ["What did he build for {t}?", "What did he develop in {t}?", "What's in {t}?",
+                         "Describe the {t} project."],
+    "project.built": ["What did he develop in {t}?", "What's in {t}?",
                       "What did he implement for {t}?", "What features does {t} have?",
                       "List what he built in {t}.", "What work did he do on {t}?"],
-    "project.stack": ["What is {t} made with?", "{t} tech stack?", "What languages is {t} written in?",
-                      "What does {t} run on?", "Which libraries did he use for {t}?",
+    "project.stack": ["What is {t} made with?", "{t} tech stack?", "What does {t} run on?", "Which libraries did he use for {t}?",
                       "What technologies are behind {t}?", "Stack used in {t}?"],
     "project.role": ["What was his job on {t}?", "Was {t} a team project?", "How big was the {t} team?",
                      "What did Alfonso do on {t}?", "Was he the lead on {t}?", "His role in {t}?",
                      "Who did he build {t} with?"],
-    "project.problem": ["What problem does {t} solve?", "Why did he build {t}?", "What need is {t} for?",
-                        "Who is {t} for, and why?", "What's the motivation for {t}?",
-                        "What challenge does {t} address?", "What was {t} trying to fix?"],
+    "project.problem": ["What problem does {t} solve?", "Why did he build {t}?",
+                        "Who is {t} for, and why?", "What challenge does {t} address?", "What was {t} trying to fix?"],
     "project.results": ["What were the results of {t}?", "How did {t} turn out?", "Any metrics for {t}?",
-                        "What did {t} achieve?", "How accurate is {t}?", "What impact has {t} had?"],
+                        "What did {t} achieve?", "How accurate is {t}?"],
     "project.award": ["Did {t} win an award?", "What did {t} win?", "Was {t} a winning project?",
-                      "Did {t} get recognition?", "Did {t} win a prize?", "Awards for {t}?",
+                      "Did {t} win a prize?", "Awards for {t}?",
                       "Did {t} take first place anywhere?"],
     "project.links": ["Link to {t}?", "Is {t} live?", "Can I try {t} online?", "Is there a video of {t}?",
                       "Where is the {t} repo?", "Show me {t}.", "Where can I watch the {t} demo?"],
@@ -820,6 +862,49 @@ MORE_TRAIN_TEMPLATES: dict[str, list[str]] = {
                                     "Is he a Python developer?"],
 }
 for _intent, _extra in MORE_TRAIN_TEMPLATES.items():
+    EXTRA_TRAIN_TEMPLATES[_intent] = _extra + EXTRA_TRAIN_TEMPLATES[_intent]
+
+# v4: spread question openers across intents. v3's error analysis found shortcuts: almost
+# every training question starting with "Can…" asked for links, so "Can you explain X?"
+# got X's links; "What did he do at…" meant role, so "What does Answr do?" got a role.
+# The fix is to make openers uninformative: "Can you…", "Could you…", "Was…" and
+# "What does…" now appear across many intents. (Near-copies of dev/test phrasings are
+# dropped automatically by train_only().)
+OPENER_TEMPLATES: dict[str, list[str]] = {
+    "project.overview": ["Can you tell me about {t}?", "Could you describe the {t} project?", "Can you say what {t} is?",
+                         "What does {t} do, in short?", "What was {t}?"],
+    "project.problem": ["Can you tell me what problem {t} solves?", "Could you explain why he built {t}?",
+                        "Was {t} solving a real problem?", "What does {t} try to fix?"],
+    "project.built": ["Can you list what he built for {t}?", "Could you tell me what he built in {t}?",
+                      "What does {t} consist of?"],
+    "project.stack": ["Can you tell me the stack of {t}?", "Could you list the technologies in {t}?",
+                      "Was {t} built with Python?", "What does {t} use under the hood?"],
+    "project.role": ["Can you tell me his role in {t}?", "Could you explain what he did on {t}?",
+                     "Was he the only developer on {t}?", "What does his role in {t} look like?"],
+    "project.results": ["Can you share the results of {t}?", "Could you tell me how {t} performed?",
+                        "Was {t} useful to anyone?", "What does {t} have to show for it?"],
+    "project.award": ["Can you tell me if {t} won anything?", "Could you check if {t} won a prize?",
+                      "Was {t} an award winner?", "Was {t} awarded anything?", "What does {t} have in awards?"],
+    "project.links": ["What's the link for {t}?", "Where can I find a demo of {t}?", "Was {t} ever published online?",
+                      "Could you share a link to {t}?"],
+    "experience.overview": ["Can you tell me what {c} is?", "Could you explain what {c} is?",
+                            "What does {c} sell or provide?", "What kind of company is {c}?", "Was {c} a startup?"],
+    "experience.role": ["Can you tell me his role at {c}?", "Could you describe his work at {c}?",
+                        "What does he handle at {c}?", "What does his work at {c} involve?", "Was he a founder of {c}?"],
+    "experience.dates": ["Can you tell me when he started at {c}?", "Was he at {c} in 2025?",
+                         "What does his timeline at {c} look like?"],
+    "experience.stack": ["Can you list the tools he uses at {c}?", "What does he code with at {c}?",
+                         "Was {c} built with Next.js?"],
+    "skill.has": ["Can you tell me if he knows {s}?", "Was {s} part of any of his projects?",
+                  "Could you check whether he has used {s}?", "What does he know about {s}?"],
+    "award.detail": ["Can you tell me what he won at {e}?", "Was he a winner at {e}?", "What does {e2} mean for him?"],
+    "award.list": ["Can you list his awards?", "Was he ever a hackathon winner?", "Could you tell me what he has won?"],
+    "profile.about": ["Can you introduce Alfonso?", "Could you tell me about him?"],
+    "profile.contact": ["Can you give me his email?", "Could you tell me how to reach him?"],
+    "profile.looking_for": ["Can you tell me what roles he wants?", "Was he looking for work this year?"],
+    "education.current": ["Can you tell me what he studies?", "Could you tell me where he goes to school?"],
+}
+for _intent, _extra in OPENER_TEMPLATES.items():
     EXTRA_TRAIN_TEMPLATES[_intent] = _extra + EXTRA_TRAIN_TEMPLATES[_intent]
 
 

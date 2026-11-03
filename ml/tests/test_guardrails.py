@@ -153,3 +153,25 @@ class MetricTests(unittest.TestCase):
         self.assertGreater(token_f1(near, ref), 0.8)
         self.assertFalse(key_facts("Yes. Alfonso has used ESP32 in SkySAR.", ref))
         self.assertEqual(token_f1("totally different", ref), 0.0)
+
+
+class NameGroundingTests(unittest.TestCase):
+    NAMES = ["Answr AI Agent", "Ask Alfonso", "PDF Chatbot (RAG)", "Answr", "ZapTap"]
+
+    def test_names_must_appear_in_the_context(self):
+        from askalfonso.guardrails import unsupported_names
+
+        ctx = "OpenAI API (used in PDF Chatbot (RAG), IdentifEye)."
+        answer = "Yes. Alfonso has used OpenAI API in PDF Chatbot (RAG) and Ask Alfonso."
+        self.assertEqual(unsupported_names(answer, ctx, self.NAMES), ["Ask Alfonso"])
+
+    def test_check_answer_rejects_the_v3_hallucination(self):
+        ctx = "Alfonso's LLM Applications skills: OpenAI API (used in PDF Chatbot (RAG))."
+        c = check_answer("Yes. Alfonso has used OpenAI API in PDF Chatbot (RAG) and Ask Alfonso.", True, ctx,
+                         "Has he used the OpenAI API?", ALLOW, self.NAMES)
+        self.assertEqual((c.ok, c.reason), (False, "unsupported_name"))
+
+    def test_shorter_name_inside_a_longer_one_is_fine(self):
+        from askalfonso.guardrails import unsupported_names
+
+        self.assertEqual(unsupported_names("Answr cut response times.", "Answr AI Agent: texts back.", self.NAMES), [])

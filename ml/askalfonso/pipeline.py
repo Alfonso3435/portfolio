@@ -61,6 +61,12 @@ class AskAlfonso:
                          f"skills and experience. You can reach him at {email}.")
         # Names the fixed refusal/greeting messages use, which never come from a chunk.
         self.allowlist = " ".join([assistant, name, email, SITE, f"{SITE}/projects", "HackMX"])
+        # Every name the knowledge base knows (with a capital letter, so topic words like
+        # "education" don't count). A fact may only mention the ones in its context.
+        # Entities only, not chunk titles: a title like "Founder at ZapTap" is a label we
+        # wrote, not a name, and never appears in the chunk text.
+        self.known_names = sorted({e for c in chunks for e in c.get("entities", [])
+                                   if any(ch.isupper() for ch in e)}, key=len, reverse=True)
         self._cache: dict[tuple[str, str], tuple[str, bool]] = {}
 
     @classmethod
@@ -109,7 +115,7 @@ class AskAlfonso:
         context = self._context(kept)
         raw, finished = self.generate(context, question)
         grounding = " ".join([context, *(self.facts.get(h.chunk_id, "") for h in kept)])
-        check = check_answer(raw, finished, grounding, question, self.allowlist)
+        check = check_answer(raw, finished, grounding, question, self.allowlist, self.known_names)
         debug = {
             "hits": [(h.chunk_id, round(h.score, 3)) for h in hits],
             "context_ids": [h.chunk_id for h in kept],
