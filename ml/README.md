@@ -27,7 +27,7 @@ only need a data edit, not retraining.
 | 3 | Decoder-only transformer from scratch | ✅ |
 | 4 | Training: fine-tune on Q&A + synthetic reading practice | ✅ |
 | 5 | Retrieval (TF-IDF) + confidence fallback + guardrails | ✅ |
-| 6 | Evaluation: accuracy, hallucination rate, refusals | |
+| 6 | Evaluation: accuracy, hallucination rate, refusals | ✅ |
 | 7 | Deployment on the site | |
 
 ## Phase 1 — build the dataset
@@ -428,3 +428,47 @@ dev (94%) and stress (76%) is the honest size of "dev was tuned on".
 **Decision: v6 is frozen.** Every further round would have to be guided by dev or stress errors,
 which would make them optimistic too. The test set — untouched since Phase 1 — gives the final
 number in Phase 6.
+
+## Phase 6 — final evaluation (test split)
+
+```bash
+python ml/evaluate_final.py --checkpoint ml/checkpoints/colab-v6/best.pt   # → ml/results/phase6_colab-v6.json
+```
+
+Run **once**, after v6 was frozen. The test split has 254 questions whose phrasings (and refusal
+topics) no model trained on, and it played no part in any decision. v4 is shown for reference only.
+
+| Metric (full pipeline) | **v6 (final)** | v4 |
+|---|---|---|
+| Retrieval: right chunk ranked 1st / in top 3 | 89.5% / 99.0% | same retriever |
+| Answerable questions: exact match | **78.1%** | 68.1% |
+| Answerable: token F1 / key facts | **82.2% / 80.0%** | 73.5% / 70.5% |
+| Answerable: declined (honest "I'm not sure") | 3.8% | 3.3% |
+| Answerable: wrong but grounded (a true fact, for the wrong question) | 18.1% | 28.6% |
+| **Hallucinations: answers naming anything not in Alfonso's data** | **0 / 202** | 0 / 203 |
+| **Should-refuse questions (unknown, private, off-topic) handled safely** | **43 / 43** | 43 / 43 |
+| Latency per question, 2-core CPU, no KV cache: p50 / p95 | 0.28 s / 1.10 s | 0.28 s / 0.89 s |
+
+**How the numbers line up.** Test (78%) landed close to the stress set (76%), not to dev (94%): the
+stress set predicted real-world accuracy, and dev — reused for five rounds of decisions — did not.
+
+**Error analysis.** Every wrong answer is one of two safe kinds: a *true* fact about the right
+project that answers a different question (36), or a decline (8). None invents anything. As on dev
+and stress, errors cluster by phrasing: three of the 27 test phrasings account for most of them —
+"Can I try {t}?" (links, 13/13 wrong: no training phrasing said "try", because the leak filter
+removed every near-copy of it), "What impact did {t} have?" (results, 12/13 wrong: same for
+"impact"), and "Give me a summary of {t}." (6/13). That is the remaining limit of a 4M-parameter
+model trained from scratch: a word it has never seen in a question doesn't map to a meaning.
+
+Refusals are always safe, but usually through the generic fallback: the model often misspells the
+unknown name it's asked about ("Riso.js" for "Redis"), and the grounding check replaces those
+answers. Only 19% of refusals keep their specific wording.
+
+**Known issues found here, to fix in the product (Phase 7), not re-measured on test:**
+- "Who is Juan Alfonso Vega Sol?" retrieves nothing: Alfonso's own name is a retrieval stopword
+  (it's in every chunk), so the question has no content words left. The profile chunk should be
+  the default for questions about him.
+- A few questions are genuinely ambiguous between the project and the company with the same name
+  (ZapTap, SAMLA): both answers are true.
+
+Fixing these after seeing test is fine for the product; the reported numbers stay the ones above.
