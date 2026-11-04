@@ -6,7 +6,9 @@ import { halfToFloat32 } from "./model";
 import { AskAlfonso } from "./pipeline";
 import type { KnowledgeJson, ModelJson } from "./types";
 
-export type WorkerRequest = { type: "load"; base: string } | { type: "ask"; id: number; question: string };
+export type WorkerRequest =
+  | { type: "load"; base: string }
+  | { type: "ask"; id: number; question: string; previous?: string };
 
 export type WorkerResponse =
   | { type: "progress"; loaded: number; total: number }
@@ -68,7 +70,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   try {
     if (!bot) throw new Error("Model not loaded");
     const instance = await bot;
-    post({ type: "answer", id: msg.id, reply: instance.ask(msg.question) });
+    post({ type: "answer", id: msg.id, reply: instance.chat(msg.question, msg.previous) });
   } catch (err) {
     post({ type: "error", id: msg.id, message: (err as Error).message });
   }

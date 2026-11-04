@@ -183,7 +183,11 @@ export class Model {
         K.set(qkv.subarray(t * 3 * C + C, t * 3 * C + 2 * C), (start + t) * C);
         Vc.set(qkv.subarray(t * 3 * C + 2 * C, t * 3 * C + 3 * C), (start + t) * C);
       }
-      for (let t = 0; t < T; t++) {
+      // In the last layer only the final token's output is ever used (to predict the next
+      // token), so the other positions stop here: their keys/values are already cached.
+      const first = l === this.layers.length - 1 ? T - 1 : 0;
+      const rows = T - first;
+      for (let t = first; t < T; t++) {
         const pos = start + t; // causal mask: attend to positions 0..pos only
         for (let head = 0; head < H; head++) {
           const qo = t * 3 * C + head * D;
@@ -202,7 +206,7 @@ export class Model {
             scores[s] = e;
             sum += e;
           }
-          const oo = t * C + head * D;
+          const oo = (t - first) * C + head * D;
           for (let d = 0; d < D; d++) attn[oo + d] = 0;
           for (let s = 0; s <= pos; s++) {
             const w = scores[s] / sum;
@@ -211,15 +215,16 @@ export class Model {
           }
         }
       }
-      linear(proj, attn, T, layer.attnProj, C, C);
-      for (let i = 0; i < T * C; i++) x[i] += proj[i];
+      const xs = x.subarray(first * C); // the rows still being computed
+      linear(proj, attn, rows, layer.attnProj, C, C);
+      for (let i = 0; i < rows * C; i++) xs[i] += proj[i];
 
       // ── MLP ──
-      layerNorm(h, x, T, C, layer.ln2, this.eps);
-      linear(hidden, h, T, layer.fc, 4 * C, C);
-      for (let i = 0; i < T * 4 * C; i++) hidden[i] = gelu(hidden[i]);
-      linear(proj, hidden, T, layer.mlpProj, C, 4 * C);
-      for (let i = 0; i < T * C; i++) x[i] += proj[i];
+      layerNorm(h, xs, rows, C, layer.ln2, this.eps);
+      linear(hidden, h, rows, layer.fc, 4 * C, C);
+      for (let i = 0; i < rows * 4 * C; i++) hidden[i] = gelu(hidden[i]);
+      linear(proj, hidden, rows, layer.mlpProj, C, 4 * C);
+      for (let i = 0; i < rows * C; i++) xs[i] += proj[i];
     });
     this.length = start + T;
 

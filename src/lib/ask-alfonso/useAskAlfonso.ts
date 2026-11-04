@@ -55,12 +55,13 @@ export function useAskAlfonso() {
   }, [ensureWorker]);
 
   const ask = useCallback(
-    (question: string) => {
+    /** `previous`: the last question answered, so follow-ups ("what about X?") make sense. */
+    (question: string, previous?: string) => {
       load();
       const id = nextId.current++;
       return new Promise<Reply>((resolve, reject) => {
         pending.current.set(id, { resolve, reject });
-        ensureWorker().postMessage({ type: "ask", id, question } satisfies WorkerRequest);
+        ensureWorker().postMessage({ type: "ask", id, question, previous } satisfies WorkerRequest);
       });
     },
     [ensureWorker, load],

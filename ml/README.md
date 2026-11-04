@@ -511,3 +511,40 @@ him ("Who is Juan Alfonso Vega Sol?") now read the profile chunk and are asked t
 
 **Cost:** $0 beyond the existing Vercel Hobby plan. Each new visitor who opens the chat downloads
 ~8 MB once; Hobby's 100 GB/month of bandwidth covers roughly 12,000 first-time chats a month.
+
+### After launch: what real conversations showed, and the fixes
+
+Testing the live chat surfaced problems that the test set couldn't, because it only has
+standalone questions that use the official names:
+
+| What a visitor typed | What happened | Cause |
+|---|---|---|
+| "what about Net Core?" (after a React question) | Invented "Netes" → blocked | No conversation memory; ".NET Core" isn't how the data names ASP.NET Core MVC |
+| "and machine learning?" | "I only answer questions about Alfonso…" | Read alone, it looks like the off-topic "What is machine learning?" |
+| "What are his AI skills?" | Generic greeting | No chunk mentions "AI skills"; TF-IDF matches words, not meanings |
+| "tell me about hackmx" | Invented a project name → blocked | An unseen phrasing (it's a held-out test phrasing) |
+
+Retrieval had found the right chunk in most of these; the model then misread the question, and the
+guardrails replaced its answer. The chat said "the model wasn't sure", which was misleading.
+
+**Fixes (no retraining):**
+
+1. **Query rewriting** (`src/lib/ask-alfonso/rewrite.ts`), before the model, as search engines do:
+   follow-ups reuse the previous question ("what about Net Core?" → "Does he have any experience with
+   ASP.NET Core MVC?"); other names map to the data's names; a bare name becomes a phrasing the model
+   was trained on ("tell me about hackmx" → "What did he win at HackMX?"); a skills question about a
+   whole area becomes a skill-group question ("AI skills" → machine learning & deep learning). It only
+   rephrases — answers still come from the model reading the chunks, through the guardrails — and the
+   chat shows "Understood as: …" whenever it changed something. 24 rewrite cases from real
+   conversations are tested (`npm run test:rewrite`).
+2. **Aliases in the site data** (`skills.ts`): `aliases` per skill (".NET Core", "sklearn", "GCP"…)
+   and per group ("AI", "web development"…). Retrieval indexes them as technology names: dev
+   recall@1 91.0% → 91.5%, stress 92.7% → 93.2% (no regression). Generic acronyms ("AI", "ML") are
+   kept out of the name-grounding check, so "focused on AI" in the profile isn't flagged.
+3. **Honest copy**: a replaced answer now says why — "its first answer mentioned something that isn't
+   in Alfonso's data", "…was about something other than what you asked", or "it didn't find
+   information about that".
+4. **Speed**: the last layer now computes only the final token (the others' keys and values are
+   already cached): ~18% less work per question, same answers.
+
+Parity is still 86/86, plus behavior checks that both implementations would miss if they shared a bug.

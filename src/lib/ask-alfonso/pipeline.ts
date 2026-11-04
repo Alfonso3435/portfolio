@@ -10,6 +10,7 @@
 import { Guardrails } from "./guardrails";
 import { Model } from "./model";
 import { Retriever, selectHits, type Hit } from "./retrieval";
+import { QueryRewriter } from "./rewrite";
 import { Tokenizer } from "./tokenizer";
 import type { KnowledgeJson, ModelJson, Reply } from "./types";
 
@@ -24,6 +25,7 @@ export class AskAlfonso {
   private readonly facts: Map<string, string>;
   private readonly prompt: ModelJson["tokenizer"]["prompt"];
   private readonly endId: number;
+  private readonly rewriter: QueryRewriter;
 
   constructor(modelJson: ModelJson, weights: Float32Array, knowledge: KnowledgeJson) {
     this.tokenizer = new Tokenizer(modelJson.tokenizer);
@@ -37,6 +39,17 @@ export class AskAlfonso {
     this.facts = new Map(chunks.map((c) => [c.id, c.facts]));
     this.prompt = modelJson.tokenizer.prompt;
     this.endId = this.tokenizer.tokenId(this.prompt.end);
+    this.rewriter = new QueryRewriter(knowledge.query);
+  }
+
+  /**
+   * For the chat: rewrite the visitor's message into a question the model knows how to
+   * read (follow-ups, other names — see rewrite.ts), then answer it. `previous` is the
+   * last question that was answered, so "what about X?" can be resolved.
+   */
+  chat(message: string, previous?: string): Reply {
+    const { question, changed } = this.rewriter.rewrite(message, previous);
+    return { ...this.ask(question), question, rewritten: changed };
   }
 
   private buildPrompt(context: string, question: string): string {

@@ -151,11 +151,15 @@ export interface Skill {
   name: string;
   /** Projects that prove this skill — each skill links to evidence. */
   projectSlugs: string[];
+  /** Other names visitors use for the same thing (".NET Core" for ASP.NET Core MVC). Ask Alfonso only. */
+  aliases?: string[];
 }
 
 export interface SkillGroup {
   name: string;
   skills: Skill[];
+  /** How visitors ask about the whole group ("AI", "web development"). Ask Alfonso only. */
+  aliases?: string[];
 }
 
 export interface Certification {

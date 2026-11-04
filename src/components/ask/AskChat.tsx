@@ -10,6 +10,24 @@ interface Message {
   role: "user" | "assistant";
   text: string;
   reply?: Reply;
+  /** For user messages: the question as the model received it, if the rewriter changed it. */
+  understoodAs?: string;
+}
+
+/** Why an answer was replaced, in plain words (guardrails' reasons → visitor-facing copy). */
+function fallbackNote(reason?: string): string {
+  switch (reason) {
+    case "ungrounded":
+    case "ungrounded_refusal":
+    case "unsupported_name":
+      return "Its first answer mentioned something that isn't in Alfonso's data, so it wasn't shown.";
+    case "off_question":
+      return "Its first answer was about something other than what you asked, so it wasn't shown.";
+    case "fact_without_context":
+      return "It didn't find information about that in Alfonso's data.";
+    default:
+      return "Its answer didn't come out right, so it wasn't shown.";
+  }
 }
 
 interface AskChatProps {
@@ -121,15 +139,22 @@ export function AskChat({ assistantName, shortName, email, suggestions }: AskCha
   const list = useRef<HTMLDivElement>(null);
   const started = useRef(false);
 
+  const lastQuestion = useRef<string | undefined>(undefined);
+
   const send = async (question: string) => {
     const q = question.trim();
     if (!q || busy) return;
     setBusy(true);
     setInput("");
-    setMessages((m) => [...m, { id: nextId.current++, role: "user", text: q }]);
+    const userId = nextId.current++;
+    setMessages((m) => [...m, { id: userId, role: "user", text: q }]);
     try {
-      const reply = await ask(q);
-      setMessages((m) => [...m, { id: nextId.current++, role: "assistant", text: reply.answer, reply }]);
+      const reply = await ask(q, lastQuestion.current);
+      lastQuestion.current = reply.question ?? q;
+      setMessages((m) => [
+        ...m.map((msg) => (msg.id === userId && reply.rewritten ? { ...msg, understoodAs: reply.question } : msg)),
+        { id: nextId.current++, role: "assistant", text: reply.answer, reply },
+      ]);
     } catch (err) {
       setMessages((m) => [
         ...m,
@@ -198,14 +223,17 @@ export function AskChat({ assistantName, shortName, email, suggestions }: AskCha
 
         {messages.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} className="max-w-[85%] self-end rounded-2xl rounded-tr-sm bg-accent px-4 py-3 text-[15px] text-on-accent">
-              {m.text}
+            <div key={m.id} className="flex max-w-[85%] flex-col items-end gap-1 self-end">
+              <div className="rounded-2xl rounded-tr-sm bg-accent px-4 py-3 text-[15px] text-on-accent">{m.text}</div>
+              {m.understoodAs ? (
+                <p className="text-right text-xs text-muted">Understood as: “{m.understoodAs}”</p>
+              ) : null}
             </div>
           ) : (
             <div key={m.id} className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-2 px-4 py-3 text-[15px]">
               <p className="whitespace-pre-line break-words">{linkify(m.text, email)}</p>
               {m.reply?.status === "fallback" ? (
-                <p className="mt-2 text-xs text-muted">The model wasn&apos;t sure enough, so it didn&apos;t guess.</p>
+                <p className="mt-2 text-xs text-muted">{fallbackNote(m.reply.debug.reason)}</p>
               ) : null}
               {m.reply ? <Sources sources={m.reply.sources} /> : null}
               {m.reply ? <HowItAnswered reply={m.reply} /> : null}

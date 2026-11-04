@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "export:knowledge": "tsx scripts/export-knowledge.ts",
-    "test:ask-alfonso": "tsx scripts/test-ask-alfonso.ts"
+    "test:ask-alfonso": "tsx scripts/test-ask-alfonso.ts",
+    "test:rewrite": "tsx scripts/test-rewrite.ts"
   },
   "dependencies": {
     "next": "16.4.2",

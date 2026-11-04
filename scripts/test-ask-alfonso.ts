@@ -66,9 +66,23 @@ for (const ref of refs) {
   }
 }
 
+// Behavior checks on top of parity (parity can't catch a bug both implementations share).
+const mustAnswer: [string, RegExp][] = [
+  ["Who is Juan Alfonso Vega Sol?", /Computer Science student/],
+  ["What did he build at HackMX?", /IdentifEye/],
+  ["What are his AI skills?", /^(?!.*I'm not sure)/],
+];
+let behaviorFailed = 0;
+for (const [q, expected] of mustAnswer) {
+  const reply = bot.chat(q);
+  const ok = reply.status === "answered" && expected.test(reply.answer);
+  if (!ok) behaviorFailed++;
+  console.log(`${ok ? "✓" : "✗"} must answer: ${q} → [${reply.status}] ${reply.answer.slice(0, 80)}`);
+}
+
 times.sort((a, b) => a - b);
 const n = refs.length;
 console.log(`\n${n} questions · tokens differ: ${tokenMismatch} · retrieval differs: ${retrievalMismatch} · ` +
   `answers differ: ${answerMismatch}`);
 console.log(`Latency (Node, one thread): p50 ${times[Math.floor(n / 2)]} ms · p95 ${times[Math.floor(n * 0.95)]} ms`);
-if (tokenMismatch || retrievalMismatch || answerMismatch / n > 0.02) process.exit(1);
+if (tokenMismatch || retrievalMismatch || answerMismatch / n > 0.02 || behaviorFailed) process.exit(1);

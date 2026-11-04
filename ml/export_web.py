@@ -35,7 +35,7 @@ import torch  # noqa: E402
 
 from askalfonso import guardrails as G  # noqa: E402
 from askalfonso import retrieval as R  # noqa: E402
-from askalfonso.knowledge import SITE  # noqa: E402
+from askalfonso.knowledge import SITE, Knowledge, award_aliases, tech_aliases  # noqa: E402
 from askalfonso.pipeline import AskAlfonso, PipelineConfig  # noqa: E402
 from askalfonso.prompt import ANSWER, CONTEXT, END, QUESTION  # noqa: E402
 
@@ -81,7 +81,7 @@ def export_model(bot: AskAlfonso, ckpt: dict) -> dict:
     }
 
 
-def export_knowledge(bot: AskAlfonso) -> dict:
+def export_knowledge(bot: AskAlfonso, kb: Knowledge) -> dict:
     r = bot.retriever
     return {
         "retrieval": {
@@ -117,7 +117,31 @@ def export_knowledge(bot: AskAlfonso) -> dict:
             "private_answer": bot.private_answer,
             "fallback": bot.fallback,
         },
+        "query": export_query(kb),
         "site": SITE,
+    }
+
+
+def export_query(kb: Knowledge) -> dict:
+    """Names for the browser's query rewriter (src/lib/ask-alfonso/rewrite.ts): follow-ups
+    ("what about X?") and other names for the same thing (".NET Core" → ASP.NET Core MVC)."""
+    techs = set()
+    for name in kb.tech_sources:
+        techs.update(tech_aliases(name))
+    skills = []
+    for group in kb.skill_groups:
+        for skill in group["skills"]:
+            if skill.get("aliases"):  # kept apart from techs: the rewriter replaces these with skill["name"]
+                skills.append({"name": skill["name"], "aliases": skill["aliases"]})
+    return {
+        "skills": skills,
+        "groups": [{"name": g["name"], "aliases": g.get("aliases", [])} for g in kb.skill_groups],
+        "techs": sorted(techs, key=lambda t: (-len(t), t)),
+        "names": {
+            "project": sorted({n for p in kb.projects for n in (p["title"], p["title"].split(" (")[0])}),
+            "company": sorted({j["company"] for j in kb.experience}),
+            "event": sorted({n for a in kb.awards for n in award_aliases(a["event"])}),
+        },
     }
 
 
@@ -159,7 +183,8 @@ def main() -> None:
 
     model_json = export_model(bot, ckpt)
     (OUT / "model.json").write_text(json.dumps(model_json, separators=(",", ":")) + "\n", encoding="utf-8")
-    (OUT / "knowledge.json").write_text(json.dumps(export_knowledge(bot), separators=(",", ":"), ensure_ascii=False)
+    kb = Knowledge.load(args.data / "knowledge.json")
+    (OUT / "knowledge.json").write_text(json.dumps(export_knowledge(bot, kb), separators=(",", ":"), ensure_ascii=False)
                                         + "\n", encoding="utf-8")
     size = (OUT / "model.bin").stat().st_size
     print(f"✓ model.bin {size / 1e6:.1f} MB ({model_json['parameters']:,} parameters, float16)")

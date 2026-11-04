@@ -74,6 +74,13 @@ export interface KnowledgeJson {
     private_answer: string;
     fallback: string;
   };
+  /** Names for the query rewriter (rewrite.ts). */
+  query: {
+    skills: { name: string; aliases: string[] }[];
+    groups: { name: string; aliases: string[] }[];
+    techs: string[];
+    names: { project: string[]; company: string[]; event: string[] };
+  };
   site: string;
 }
 
@@ -85,6 +92,10 @@ export interface Source {
 }
 
 export interface Reply {
+  /** The question that was actually answered, after rewriting (rewrite.ts). */
+  question?: string;
+  /** True when the rewriter changed what the visitor typed. */
+  rewritten?: boolean;
   answer: string;
   status: ReplyStatus;
   sources: Source[];

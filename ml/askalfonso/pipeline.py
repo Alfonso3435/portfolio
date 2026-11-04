@@ -19,7 +19,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .guardrails import check_answer, is_greeting, is_private, is_refusal
+from .guardrails import GENERIC_ACRONYMS, check_answer, is_greeting, is_private, is_refusal
 from .inference import generate_answer, load_checkpoint
 from .knowledge import SITE, Knowledge
 from .prompt import build_prompt
@@ -76,8 +76,11 @@ class AskAlfonso:
         # "education" don't count). A fact may only mention the ones in its context.
         # Entities only, not chunk titles: a title like "Founder at ZapTap" is a label we
         # wrote, not a name, and never appears in the chunk text.
+        # Generic acronyms ("AI", "ML", now group aliases in skills.ts) aren't names: the
+        # profile says "focused on AI" without any chunk being *about* AI.
         self.known_names = sorted({e for c in chunks for e in [*c.get("entities", []), *c.get("techs", [])]
-                                   if any(ch.isupper() for ch in e)}, key=len, reverse=True)
+                                   if any(ch.isupper() for ch in e) and e.lower() not in GENERIC_ACRONYMS},
+                                  key=len, reverse=True)
         self._cache: dict[tuple[str, str], tuple[str, bool]] = {}
 
     @classmethod

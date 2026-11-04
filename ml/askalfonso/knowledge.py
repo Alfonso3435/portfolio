@@ -112,6 +112,14 @@ class Knowledge:
                 add(skill_chunk_id(group), skill["name"])
                 for slug in skill["projectSlugs"]:
                     add(f"project/{slug}", skill["name"])
+                # Other names visitors use (".NET Core" for ASP.NET Core MVC) — from skills.ts.
+                for alias in skill.get("aliases", []):
+                    add(skill_chunk_id(group), alias)
+                    for slug in skill["projectSlugs"]:
+                        add(f"project/{slug}", alias)
+            # And for the whole group ("AI skills" → Machine Learning & Deep Learning).
+            for alias in group.get("aliases", []):
+                add(skill_chunk_id(group), alias)
         for project in self.projects:
             for tech in project["stack"]:
                 add(f"project/{project['slug']}", tech)
