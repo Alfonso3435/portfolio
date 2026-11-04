@@ -148,7 +148,8 @@ The test split is never used during training; it's reserved for Phase 6.
 | v2 | 3× more training phrasings; endless invented unknowns; dedupe | 100% | 63% |
 | v3 | Retrieval-style contexts; award + links in project chunks; ~1.7× more training questions; WikiText-2 pretraining | 100% | 68.7% (retrieved contexts) |
 | v4 | Fixed reference answers; question openers spread across intents; near-copies of dev/test phrasings removed | 100% | 72.7% (retrieved contexts) |
-| v5 | 3× bigger model; ~25× more pretraining (WikiText-103); two fine-tuning learning rates; retrieval tech bonus | _pending_ | _pending_ |
+| v5a | 3× bigger model; ~25× more pretraining (WikiText-103); fine-tune LR 5e-4 | 100% | 72.7% (retrieved contexts) |
+| v5b | Same, fine-tune LR 1e-3 | 100% | 70.0% (retrieved contexts) |
 
 Dev EM from v3 on is measured on **retrieved** contexts (as in the pipeline), so it isn't
 directly comparable with v1/v2's random contexts. The fair comparison is the Phase 5
@@ -356,3 +357,28 @@ skill chunks, +0.25 elsewhere), tuned on *train* questions: dev recall@1 78% →
 3. **Two fine-tuning runs** from the same pretrained weights: LR 5e-4 (gentler, keeps more of the
    pretraining) and 1e-3 (v1–v4's). The pipeline picks between them, and v4, on dev.
 4. **Mixed precision on the T4** (float16 with loss scaling): tensor cores make it 2–3× faster.
+
+### v5 results: bigger isn't better here — and dev was flattering us
+
+Full pipeline, τ = 0.10, same code for every model:
+
+| | Dev: exact | Dev: refusals | **Stress set: exact** | Size |
+|---|---|---|---|---|
+| **v4** (4 layers, 256-dim, WikiText-2) | **84.4%** | **100%** | **62.7%** | 3.9M params |
+| v5a (6 layers, 384-dim, WikiText-103, LR 5e-4) | 81.0% | 95.5% | 51.7% | 11.7M params |
+| v5b (same, LR 1e-3) | 79.1% | 93.2% | 54.1% | 11.7M params |
+
+Pretraining worked as language modeling (Wikipedia loss 7.7 → 2.1; fine-tuning dev loss 0.10 vs
+v4's 0.18), but the bigger model memorized the training phrasings faster (best epoch 16 vs 60)
+and generalized *worse* to new wording. v4 stays the best model.
+
+**The stress set** (`askalfonso/stress.py`, `ml/data/qa/stress.jsonl`): 453 questions, ~85 new
+phrasings that no model trained on and that are checked to be far from every train/dev/test
+phrasing. It exists because dev has only ~27 held-out phrasings and every model either gets a
+phrasing right for all projects or wrong for all of them — so dev moves in ~4-point jumps. On
+the stress set v4 handles 47 of 83 phrasings; v5a handles 38 (34 overlap).
+
+**The honest number is lower than dev said.** v4 scores 84% on dev but 63% on phrasings nobody
+tuned for. Five rounds of error analysis on dev made dev optimistic — exactly the risk *Structuring
+ML Projects* warns about when a dev set is reused to make many decisions. That's why test was
+never touched: it gives the unbiased number in Phase 6.

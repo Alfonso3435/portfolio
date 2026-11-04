@@ -223,5 +223,27 @@ class ReferenceAnswerTests(unittest.TestCase):
                       got)
 
 
+
+class StressSetTests(unittest.TestCase):
+    def test_stress_phrasings_are_new(self):
+        from askalfonso.qa import QAGenerator, near_duplicate
+        from askalfonso.stress import STRESS_TEMPLATES, _StressGenerator
+
+        kb = ReferenceAnswerTests().kb()
+        gen = _StressGenerator(kb)
+        gen._projects()
+        stress = [ex for ex in gen.examples if ex.split == "stress"]
+        self.assertTrue(stress)
+        # Every stress phrasing that was kept is far from every train/dev/test phrasing…
+        for intent, dataset_phrasings in gen.dataset_templates.items():
+            kept = [t for t in STRESS_TEMPLATES.get(intent, []) if (intent, t) not in gen.dropped]
+            for t in kept:
+                self.assertFalse(any(near_duplicate(t, d) for d in dataset_phrasings), (intent, t))
+        # …and no stress question is literally a dataset question.
+        real = QAGenerator(kb)
+        real._projects()
+        self.assertFalse({ex.question.lower() for ex in stress} & {ex.question.lower() for ex in real.examples})
+
+
 if __name__ == "__main__":
     unittest.main()

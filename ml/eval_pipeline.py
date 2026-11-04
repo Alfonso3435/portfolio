@@ -100,7 +100,7 @@ def run_pipeline(args, rows: list[dict]) -> None:
         a = Counter(o for row, _, o in out if row["gold_chunks"])
         r = Counter(o for row, _, o in out if not row["gold_chunks"])
         total = sum(o == "correct" for _, _, o in out)
-        na, nr = len(answerable), len(refuse)
+        na, nr = max(len(answerable), 1), max(len(refuse), 1)  # the stress set has no refusals
         soft = [score(reply.answer, row["answer"]) for row, reply, _ in out if row["gold_chunks"]]
         f1 = sum(x["f1"] for x in soft) / na
         facts = sum(x["facts"] for x in soft) / na
@@ -134,7 +134,7 @@ def run_pipeline(args, rows: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", type=Path, default=ML / "data")
-    parser.add_argument("--split", choices=["dev", "test"], default="dev")
+    parser.add_argument("--split", choices=["dev", "test", "stress"], default="dev")
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--thresholds", type=float, nargs="+", default=[0.10, 0.08, 0.12, 0.15])

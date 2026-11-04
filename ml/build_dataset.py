@@ -26,6 +26,7 @@ from pathlib import Path
 
 from askalfonso.knowledge import Knowledge, chunk_to_dict
 from askalfonso.qa import QAGenerator, add_casual_variants, to_record
+from askalfonso.stress import stress_examples
 
 ML_DIR = Path(__file__).resolve().parent
 DATA_DIR = ML_DIR / "data"
@@ -100,6 +101,12 @@ def main() -> int:
         rng.shuffle(rows)  # mix intents so batches aren't all "project.stack"
         write_jsonl(DATA_DIR / "qa" / f"{split}.jsonl", rows)
 
+    # Paraphrase stress set (model comparison only, never training): see askalfonso/stress.py.
+    seen = {ex["question"].lower().rstrip("?.!").strip() for ex in examples}
+    stress, dropped = stress_examples(kb)
+    stress_rows = [to_record(ex) for ex in stress if ex.question.lower().rstrip("?.!").strip() not in seen]
+    write_jsonl(DATA_DIR / "qa" / "stress.jsonl", stress_rows)
+
     stats = {
         "chunks": len(chunks),
         "corpus_words": sum(len(c["text"].split()) for c in chunks),
@@ -117,6 +124,9 @@ def main() -> int:
     for split in SPLITS:
         types = ", ".join(f"{k} {v}" for k, v in sorted(stats["per_type"][split].items()))
         print(f"    {split:<5} {stats['per_split'].get(split, 0):>5}   ({types})")
+
+    print(f"    stress {len(stress_rows):>4}   (new phrasings for model comparison; {len(dropped)} dropped as "
+          "near-copies of dataset phrasings)")
 
     print("\nRandom samples:")
     for ex in random.Random(args.seed + 1).sample(examples, min(args.samples, len(examples))):
