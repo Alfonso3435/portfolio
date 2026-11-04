@@ -26,24 +26,24 @@ export default function LabPage() {
         <div className="flex min-w-0 flex-[1_1_420px] flex-col justify-center gap-5">
           <p className="font-mono text-[13px] uppercase tracking-[0.06em] text-accent">Lab</p>
           <h1 id="lab-title" className="font-display text-4xl leading-[1.06] font-bold tracking-tight sm:text-5xl">
-            {profile.assistantName}: a language model I&apos;m building from scratch.
+            {profile.assistantName}: a language model I built from scratch.
           </h1>
           <p className="text-lg text-muted">
-            Tokenizer, transformer, training loop and retrieval, all written by me and applied end-to-end. It will
-            only answer from my real profile data, and say so when it doesn&apos;t know.
+            Tokenizer, transformer, training loop, retrieval and guardrails, all written by me and applied end-to-end.
+            It only answers from my real profile data, says so when it doesn&apos;t know, and runs entirely in your
+            browser.
           </p>
         </div>
 
         <div className="flex min-w-0 flex-[1_1_420px] flex-col justify-center gap-4 rounded-2xl border border-line bg-surface p-7">
-          <Chip tone="accent">Status · In development</Chip>
+          <Chip tone="accent">Status · Live</Chip>
           <p className="text-[17px]">
-            The chat will live here once the model is trained and evaluated. Until then, this page documents the
-            build: architecture, training curves and honest limitations will be added as each phase ships.
+            On 254 test questions it had never seen: 78% answered exactly right, 0 invented facts, and none of
+            the personal, unknown or off-topic questions got a made-up answer. Training curves and the full write-up are coming to this page.
           </p>
           <p className="text-[15px] text-muted">
-            Want to talk about it now?{" "}
-            <Link href="/contact" className="text-accent hover:text-fg">
-              Get in touch →
+            <Link href="/ask" className="font-semibold text-accent hover:text-fg">
+              Try {profile.assistantName} →
             </Link>
           </p>
         </div>

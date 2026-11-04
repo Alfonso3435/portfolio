@@ -43,7 +43,7 @@ export function SiteHeader() {
         </nav>
 
         <Link
-          href="/lab"
+          href="/ask"
           className="inline-flex min-h-11 items-center rounded-full bg-accent px-[18px] text-[15px] font-semibold text-on-accent transition-opacity hover:opacity-90"
         >
           {profile.assistantName}

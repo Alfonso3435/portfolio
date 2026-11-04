@@ -28,7 +28,7 @@ only need a data edit, not retraining.
 | 4 | Training: fine-tune on Q&A + synthetic reading practice | ✅ |
 | 5 | Retrieval (TF-IDF) + confidence fallback + guardrails | ✅ |
 | 6 | Evaluation: accuracy, hallucination rate, refusals | ✅ |
-| 7 | Deployment on the site | |
+| 7 | Deployment on the site (runs in the browser) | ✅ |
 
 ## Phase 1 — build the dataset
 
@@ -472,3 +472,42 @@ answers. Only 19% of refusals keep their specific wording.
   (ZapTap, SAMLA): both answers are true.
 
 Fixing these after seeing test is fine for the product; the reported numbers stay the ones above.
+
+## Phase 7 — deployment: it runs in your browser
+
+```bash
+python ml/export_web.py --checkpoint ml/checkpoints/colab-v6/best.pt   # → public/ask-alfonso/
+npm run test:ask-alfonso                                                # TypeScript vs Python, answer by answer
+```
+
+**Decision: run the model in the visitor's browser, in plain TypeScript.** The priority was cost.
+
+| Option | Cost | Work | Verdict |
+|---|---|---|---|
+| Python API (FastAPI + PyTorch on a server) | A server that's always on, or free tiers with ~30 s cold starts; PyTorch is far over Vercel's function size limit | Medium | ✗ |
+| ONNX + onnxruntime-web | $0 | Export + a ~10 MB runtime + a generation loop in JS anyway | Possible |
+| **Hand-written TypeScript forward pass** | **$0** — static files on Vercel's CDN | One file of math (`model.ts`) | ✓ |
+
+The model is small (3.9M parameters), so a hand-written forward pass is fast enough, needs no
+runtime library, and is one more thing built from scratch.
+
+- `export_web.py` writes three static files: `model.bin` (weights as float16, **7.7 MB**),
+  `model.json` (shapes, config, tokenizer) and `knowledge.json` (chunks, the TF-IDF index and every
+  guardrail word list — exported from Python so the two implementations can't drift).
+- `src/lib/ask-alfonso/` ports the pipeline: `tokenizer.ts`, `model.ts` (with a **KV cache**: each
+  new token only attends to stored keys/values instead of re-running the prompt), `retrieval.ts`,
+  `guardrails.ts`, `pipeline.ts`. It runs in a **Web Worker** so the page never freezes.
+- `/ask` downloads the model on first visit only (the home page downloads nothing) and the browser
+  caches it. Nothing a visitor types leaves their device.
+
+**Verified, not assumed.** `npm run test:ask-alfonso` runs 86 questions through both implementations
+(with the same float16 weights): token ids, retrieval ranking and final answers match on **86/86**.
+In headless Chromium the model loads in ~1 s and answers in ~0.2–3.5 s depending on prompt length
+(most of it is reading the retrieved chunks, ~100–600 tokens).
+
+**Product fixes from the Phase 6 error analysis** (not re-measured on test): questions that only name
+him ("Who is Juan Alfonso Vega Sol?") now read the profile chunk and are asked to the model as
+"Tell me about Alfonso." — his name is a retrieval stopword, so they used to retrieve nothing.
+
+**Cost:** $0 beyond the existing Vercel Hobby plan. Each new visitor who opens the chat downloads
+~8 MB once; Hobby's 100 GB/month of bandwidth covers roughly 12,000 first-time chats a month.

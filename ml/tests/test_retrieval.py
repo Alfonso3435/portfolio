@@ -82,5 +82,15 @@ class AliasTests(unittest.TestCase):
         self.assertEqual(tech_aliases("Python"), ["Python"])
 
 
+class AboutHimTests(unittest.TestCase):
+    def test_name_only_questions_are_about_him(self):
+        from askalfonso.retrieval import about_him
+
+        for q in ["Who is Juan Alfonso Vega Sol?", "Alfonso?", "Who's Poncho?", "tell me about alfonso"]:
+            self.assertTrue(about_him(q), q)
+        for q in ["What did Alfonso build at HackMX?", "Does Alfonso know PyTorch?", "Who are you?"]:
+            self.assertFalse(about_him(q), q)
+
+
 if __name__ == "__main__":
     unittest.main()

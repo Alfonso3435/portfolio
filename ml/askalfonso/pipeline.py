@@ -23,7 +23,17 @@ from .guardrails import check_answer, is_greeting, is_private, is_refusal
 from .inference import generate_answer, load_checkpoint
 from .knowledge import SITE, Knowledge
 from .prompt import build_prompt
-from .retrieval import MAX_CHUNKS, RELATIVE, THRESHOLD, Hit, TfidfRetriever, select_hits
+from .retrieval import (
+    ABOUT_QUESTION,
+    MAX_CHUNKS,
+    PROFILE_CHUNK,
+    RELATIVE,
+    THRESHOLD,
+    Hit,
+    TfidfRetriever,
+    about_him,
+    select_hits,
+)
 from .training_data import CONTEXT_SEPARATOR
 
 
@@ -52,6 +62,7 @@ class AskAlfonso:
         self.cfg = config or PipelineConfig()
         self.retriever = TfidfRetriever(chunks)
         self.texts = {c["id"]: c["text"] for c in chunks}
+        self.titles = {c["id"]: c["title"] for c in chunks}
         # Extra facts per chunk for the grounding check only (Knowledge.grounding_facts).
         self.facts = facts or {}
         self.email = email
@@ -86,7 +97,10 @@ class AskAlfonso:
     def retrieve(self, question: str) -> tuple[list[Hit], list[Hit]]:
         """(all top hits for debugging, the hits that pass the confidence threshold)."""
         hits = self.retriever.search(question, k=max(3, self.cfg.max_chunks))
-        return hits, select_hits(hits, self.cfg.threshold, self.cfg.relative, self.cfg.max_chunks)
+        kept = select_hits(hits, self.cfg.threshold, self.cfg.relative, self.cfg.max_chunks)
+        if not kept and about_him(question):
+            kept = [Hit(PROFILE_CHUNK, self.titles[PROFILE_CHUNK], self.cfg.threshold)]
+        return hits, kept
 
     def fit_context(self, kept: list[Hit], question: str) -> list[Hit]:
         """Drop the weakest chunk until the prompt leaves room for the answer."""
@@ -111,9 +125,10 @@ class AskAlfonso:
             return Reply(self.private_answer, "private", debug={"reason": "private_guard"})
 
         hits, kept = self.retrieve(question)
-        kept = self.fit_context(kept, question)
+        asked = ABOUT_QUESTION if about_him(question) else question  # see retrieval.ABOUT_QUESTION
+        kept = self.fit_context(kept, asked)
         context = self._context(kept)
-        raw, finished = self.generate(context, question)
+        raw, finished = self.generate(context, asked)
         grounding = " ".join([context, *(self.facts.get(h.chunk_id, "") for h in kept)])
         check = check_answer(raw, finished, grounding, question, self.allowlist, self.known_names)
         debug = {

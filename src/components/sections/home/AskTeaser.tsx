@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { profile } from "@/data/profile";
 
-// Questions the finished assistant will answer. Each one is answerable from src/data.
+// Each one is answerable from src/data; clicking one opens the chat and asks it.
 const sampleQuestions = [
   "What did he build at HackMX?",
   "Does he know TensorFlow?",
@@ -9,8 +9,8 @@ const sampleQuestions = [
 ];
 
 /**
- * Preview of the chatbot in the hero. No fake input box: until the model
- * ships, this card is honest about its status and links to the Lab.
+ * Entry point to the chatbot from the hero. The model itself (7.7 MB) only downloads
+ * on /ask, so the home page stays light.
  */
 export function AskTeaser() {
   return (
@@ -23,23 +23,33 @@ export function AskTeaser() {
           {profile.assistantName}
         </h2>
         <span className="rounded-full border border-line px-2.5 py-1 font-mono text-xs text-muted">
-          LLM built from scratch · in development
+          LLM built from scratch · live
         </span>
       </div>
       <p className="rounded-xl bg-surface-2 px-4 py-3.5 text-[15px] leading-relaxed">
-        Hi! I&apos;m a small language model {profile.shortName} is building from scratch. Soon you&apos;ll be able
-        to ask me about his projects, skills and experience, like:
+        Hi! I&apos;m a small language model {profile.shortName} built from scratch, and I run right in your browser.
+        Ask me about his projects, skills and experience, like:
       </p>
       <ul className="flex flex-col gap-2">
         {sampleQuestions.map((q) => (
-          <li key={q} className="rounded-lg border border-line px-3.5 py-2.5 text-sm text-muted">
-            “{q}”
+          <li key={q}>
+            <Link
+              href={`/ask?q=${encodeURIComponent(q)}`}
+              className="block rounded-lg border border-line px-3.5 py-2.5 text-sm text-muted hover:border-muted hover:text-fg"
+            >
+              “{q}”
+            </Link>
           </li>
         ))}
       </ul>
-      <Link href="/lab" className="text-[15px] font-semibold text-accent hover:text-fg">
-        See how it&apos;s being built →
-      </Link>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <Link href="/ask" className="text-[15px] font-semibold text-accent hover:text-fg">
+          Open the chat →
+        </Link>
+        <Link href="/lab" className="text-[15px] text-muted hover:text-fg">
+          How it&apos;s built
+        </Link>
+      </div>
     </aside>
   );
 }

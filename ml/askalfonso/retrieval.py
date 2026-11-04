@@ -94,6 +94,22 @@ def terms(text: str, expand: bool = False) -> list[str]:
     return ws + [f"{a} {b}" for a, b in zip(ws, ws[1:])]
 
 
+# His own name is a stopword (it's in nearly every chunk), so "Who is Juan Alfonso Vega Sol?"
+# had no content words left and retrieved nothing (found in Phase 6). A question that names
+# him and asks nothing else is about him in general: answer from the profile.
+NAME_WORDS = {"alfonso", "alfonsos", "poncho", "juan", "vega", "sol"}
+PROFILE_CHUNK = "profile/about"
+# …and asked the way the model knows best: it read "Who is Juan Alfonso Vega Sol?" as a
+# question about an unknown project called "Vega". Rewriting the query (not the answer)
+# is ordinary search engineering; the answer still comes from the model reading the profile.
+ABOUT_QUESTION = "Tell me about Alfonso."
+
+
+def about_him(question: str) -> bool:
+    content = [w for w in words(question) if len(w) > 1]  # "who's" leaves a stray "s"
+    return any(w in NAME_WORDS for w in TOKEN_RE.findall(fold(question))) and not content
+
+
 @dataclass
 class Hit:
     chunk_id: str

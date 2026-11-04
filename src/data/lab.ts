@@ -36,6 +36,11 @@ export const labSteps: LabStep[] = [
     description: "Accuracy on held-out questions, hallucination rate, refusal correctness and latency.",
     foundation: "Structuring Machine Learning Projects",
   },
+  {
+    label: "07 · Deployment",
+    title: "Runs in your browser",
+    description: "The 3.9M-parameter model, tokenizer and retrieval ported to TypeScript: no server, no cost.",
+  },
 ];
 
 // Interactive tools planned for the Lab. Flip `status` to "live" as each one ships.
