@@ -13,7 +13,7 @@ Every question ends in one of these outcomes:
         safe miss   refused or fell back: unhelpful, but honest
         wrong       stated something that isn't the reference answer  ← what we minimize
     questions it should refuse (unknown, private, off-topic)
-        correct     refused, or fell back
+        correct     refused, fell back, or redirected with the greeting (states nothing)
         wrong       stated a "fact"                                     ← a hallucination
 """
 
@@ -66,7 +66,12 @@ def outcome(row: dict, reply, normalize) -> str:
     if row["type"] == "greeting":
         return "correct" if reply.answer.startswith("Hi!") else "wrong"
     if row["type"] in REFUSE_TYPES:
-        return "correct" if reply.status in {"refused", "private", "fallback"} else "wrong"
+        if reply.status in {"refused", "private", "fallback"}:
+            return "correct"
+        # "Tell me a joke." → "Hi! I'm Ask Alfonso… ask me about his projects": not the
+        # reference refusal, but it states nothing and steers back on topic. Counted as safe,
+        # not as a hallucination (v1–v5 tables counted it as wrong).
+        return "correct" if reply.answer.startswith("Hi! I'm") else "wrong"
     if normalize(reply.answer) == normalize(row["answer"]):
         return "correct"
     return "safe_miss" if reply.status in {"refused", "private", "fallback"} else "wrong"

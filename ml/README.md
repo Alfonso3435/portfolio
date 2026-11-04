@@ -150,6 +150,7 @@ The test split is never used during training; it's reserved for Phase 6.
 | v4 | Fixed reference answers; question openers spread across intents; near-copies of dev/test phrasings removed | 100% | 72.7% (retrieved contexts) |
 | v5a | 3× bigger model; ~25× more pretraining (WikiText-103); fine-tune LR 5e-4 | 100% | 72.7% (retrieved contexts) |
 | v5b | Same, fine-tune LR 1e-3 | 100% | 70.0% (retrieved contexts) |
+| **v6** | v4's model + paraphrase grammar, fresh phrasings every epoch | 100% | **82.7%** (retrieved contexts) |
 
 Dev EM from v3 on is measured on **retrieved** contexts (as in the pipeline), so it isn't
 directly comparable with v1/v2's random contexts. The fair comparison is the Phase 5
@@ -403,3 +404,27 @@ attacks the real problem — too few ways of asking each question:
 **Caveat, stated plainly:** the grammar, the stress set and the earlier templates were all written
 by the same author (Claude), who had seen the dev and test phrasings. The filter removes close
 matches, but shared style can't be filtered out. Test remains the reference number.
+
+### v6 results — the final model
+
+Full pipeline, τ = 0.10, same code and questions for both:
+
+| | Dev: exact | Dev: F1 / key facts | **Stress: exact** | Stress: F1 / key facts | Should-refuse handled safely |
+|---|---|---|---|---|---|
+| v4 | 84.4% | 88.4% / 86.3% | 62.7% | 70.6% / 67.3% | 43/43 |
+| **v6** | **93.8%** | **96.0% / 96.7%** | **75.5%** | **80.5% / 79.0%** | **43/43** |
+
+More ways of asking — not a bigger model — was the fix: +13 points on phrasings no model trained
+on, with the same 3.9M-parameter network. No answer to a should-refuse question stated a fact. (The
+two off-topic questions answered with the greeting, "Hi! I'm Ask Alfonso… ask me about his
+projects", are counted as safe from v6 on; earlier tables counted them as wrong.)
+
+**What's left** (stress): mostly projects' results, role, overview and built, and several of those
+"errors" are defensible answers to an ambiguous question — "What went into building IdentifEye?"
+answered with its stack, "Give me the elevator pitch for ZapTap" answered with the company rather
+than the project. Stress phrasings were written by the same author as the grammar; the gap between
+dev (94%) and stress (76%) is the honest size of "dev was tuned on".
+
+**Decision: v6 is frozen.** Every further round would have to be guided by dev or stress errors,
+which would make them optimistic too. The test set — untouched since Phase 1 — gives the final
+number in Phase 6.
