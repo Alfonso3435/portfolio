@@ -117,6 +117,7 @@ class EpochBuilder:
         policy: ContextPolicy | None = None,
         seed: int = 0,
         records: list[dict] | None = None,
+        paraphrases_per_group: int = 0,
     ):
         """records: the chunk records ({id, title, text, entities, techs}) for the retriever.
         Without them, every context is sampled at random (the v2 behavior)."""
@@ -128,6 +129,15 @@ class EpochBuilder:
         self.rng = random.Random(seed)
         self.skipped = 0
         self.records = records or []
+        # v6: grammar paraphrases (paraphrase.py), grouped by (intent, entity); every epoch
+        # draws `paraphrases_per_group` fresh ones from each group.
+        self.paraphrases_per_group = paraphrases_per_group
+        self.paraphrase_groups: dict[tuple[str, str], list] = {}
+        if paraphrases_per_group:
+            from .paraphrase import paraphrase_examples
+
+            for ex in paraphrase_examples(kb):
+                self.paraphrase_groups.setdefault((ex.intent, ex.id.split(":")[2]), []).append(ex)
         # Real questions never change, so their retrieval context is computed once.
         retriever = TfidfRetriever(self.records) if self.records else None
         self.retrieved = [
@@ -146,8 +156,18 @@ class EpochBuilder:
             ids = self._context(row["gold_chunks"], self.chunks, retrieved)
             self._add(out, ids, row["gold_chunks"], self.chunks, row["question"], row["answer"])
 
+        if self.paraphrase_groups:
+            retriever = TfidfRetriever(self.records) if self.records else None
+            for group in self.paraphrase_groups.values():
+                for ex in self.rng.sample(group, min(self.paraphrases_per_group, len(group))):
+                    retrieved = (retrieved_context(retriever, ex.question, ex.gold_chunks, self.policy.max_chunks)
+                                 if retriever else None)
+                    ids = self._context(ex.gold_chunks, self.chunks, retrieved)
+                    self._add(out, ids, ex.gold_chunks, self.chunks, ex.question, ex.answer)
+
         if self.synthetic_projects:
-            examples, fake = synthetic_examples(self.kb, self.synthetic_projects, self.rng, self.banned_tech)
+            examples, fake = synthetic_examples(self.kb, self.synthetic_projects, self.rng, self.banned_tech,
+                                                paraphrases=bool(self.paraphrases_per_group))
             # Refusals about invented technologies/projects: about 1 per 2 fake projects' worth of questions.
             examples += synthetic_refusals(self.kb, self.rng, n_tech=2 * self.synthetic_projects,
                                            n_projects=self.synthetic_projects, banned_tech=self.banned_tech)

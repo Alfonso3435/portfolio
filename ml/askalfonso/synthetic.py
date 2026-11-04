@@ -168,7 +168,8 @@ def fake_knowledge(real: Knowledge, n_projects: int, rng: random.Random, banned_
 
 
 def synthetic_examples(
-    real: Knowledge, n_projects: int, rng: random.Random, banned_tech: set[str], per_intent: int = 2
+    real: Knowledge, n_projects: int, rng: random.Random, banned_tech: set[str], per_intent: int = 2,
+    paraphrases: bool = False,
 ) -> tuple[list[QA], dict[str, Chunk]]:
     """Fresh fake projects → (Q&A using train templates only, {chunk_id: Chunk}).
 
@@ -182,10 +183,16 @@ def synthetic_examples(
     gen = QAGenerator(kb)
     gen._projects()
     gen._skills()
+    pool = list(gen.examples)
+    if paraphrases:  # v6: the grammar's phrasings too, so invented projects get the same variety
+        from .paraphrase import paraphrase_examples
+
+        pool += paraphrase_examples(kb, projects_only=True)
     groups: dict[tuple[str, str], list[QA]] = defaultdict(list)
-    for ex in gen.examples:
+    for ex in pool:
         if ex.split == "train":
-            groups[(ex.intent, ex.id.split(":")[1])].append(ex)
+            parts = ex.id.split(":")  # "project.stack:slug:3" or "para:project.stack:slug:17"
+            groups[(ex.intent, parts[2] if parts[0] == "para" else parts[1])].append(ex)
     examples = []
     for group in groups.values():
         examples += rng.sample(group, min(per_intent, len(group)))

@@ -245,5 +245,39 @@ class StressSetTests(unittest.TestCase):
         self.assertFalse({ex.question.lower() for ex in stress} & {ex.question.lower() for ex in real.examples})
 
 
+
+class ParaphraseTests(unittest.TestCase):
+    def test_grammar_expands_every_combination(self):
+        from askalfonso.paraphrase import expand
+
+        got = expand(["What ", ["problem", "issue"], " does {t} ", ["solve", "fix"], " ?"])
+        self.assertEqual(got, ["What problem does {t} solve?", "What problem does {t} fix?",
+                               "What issue does {t} solve?", "What issue does {t} fix?"])
+
+    def test_strict_filter_catches_reworded_held_out_phrasings(self):
+        from askalfonso.paraphrase import too_close
+
+        self.assertTrue(too_close("Summarize {t}.", "Give me a summary of {t}."))  # same stem "summa"
+        self.assertTrue(too_close("What's the motivation for {t}?", "What was the motivation behind {t}?"))
+        self.assertFalse(too_close("Why did he build {t}?", "What was the motivation behind {t}?"))
+
+    def test_pool_answers_match_the_dataset_and_skip_held_out_questions(self):
+        from askalfonso.paraphrase import paraphrase_examples
+        from askalfonso.qa import QAGenerator
+
+        kb = ReferenceAnswerTests().kb()
+        pool = paraphrase_examples(kb, projects_only=True)
+        self.assertGreater(len(pool), 100)
+        gen = QAGenerator(kb)
+        gen._projects()
+        # Same answer as the dataset for the same (question type, project)…
+        answers = {(ex.intent, ex.id.split(":")[1]): ex.answer for ex in gen.examples}
+        for ex in pool:
+            self.assertEqual(ex.answer, answers[(ex.intent, ex.id.split(":")[2])])
+        # …and never a dev/test question.
+        held_out = {ex.question.lower() for ex in gen.examples if ex.split != "train"}
+        self.assertFalse({ex.question.lower() for ex in pool} & held_out)
+
+
 if __name__ == "__main__":
     unittest.main()

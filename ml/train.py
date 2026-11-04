@@ -84,6 +84,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--grad-clip", type=float, default=1.0)
     # data
     p.add_argument("--synthetic-projects", type=int, default=16, help="fake projects per epoch (0 = off)")
+    p.add_argument("--paraphrases", type=int, default=0,
+                   help="v6: grammar phrasings drawn per (question type, entity) each epoch (0 = off)")
     # stage A
     p.add_argument("--pretrain-text", type=Path, nargs="*", default=[])
     p.add_argument("--pretrain-steps", type=int, default=0)
@@ -340,7 +342,7 @@ def main() -> int:
     state = state if stage == "finetune" else None  # from here on, `state` means a stage B checkpoint
 
     builder = EpochBuilder(tok, kb, train_rows, chunks, cfg.block_size, args.synthetic_projects,
-                           held_out_tech, seed=args.seed, records=records)
+                           held_out_tech, seed=args.seed, records=records, paraphrases_per_group=args.paraphrases)
     dev_items = eval_examples(tok, dev_rows, chunks, cfg.block_size, records=records)
     dev_batches = [collate([e for _, _, e in dev_items[i : i + args.batch_size]], pad_id(tok))
                    for i in range(0, len(dev_items), args.batch_size)]
@@ -351,7 +353,7 @@ def main() -> int:
     steps_per_epoch = math.ceil(len(first_epoch) / args.batch_size)
     total_steps = steps_per_epoch * args.epochs
     print(f"Stage B: ~{len(first_epoch)} examples/epoch "
-          f"({len(train_rows)} real + synthetic), {steps_per_epoch} steps/epoch, up to {args.epochs} epochs\n")
+          f"({len(train_rows)} real + {'paraphrases + ' if args.paraphrases else ''}synthetic), {steps_per_epoch} steps/epoch, up to {args.epochs} epochs\n")
 
     best = {"dev_em": -1.0, "dev_loss": float("inf"), "epoch": 0}
     stale, step, start, first = 0, 0, time.perf_counter(), 1

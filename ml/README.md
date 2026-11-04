@@ -382,3 +382,24 @@ the stress set v4 handles 47 of 83 phrasings; v5a handles 38 (34 overlap).
 tuned for. Five rounds of error analysis on dev made dev optimistic — exactly the risk *Structuring
 ML Projects* warns about when a dev set is reused to make many decisions. That's why test was
 never touched: it gives the unbiased number in Phase 6.
+
+### v6: change the data, not the model
+
+v4's model (4 layers, 256-dim) generalized better than v5's bigger one, so v6 keeps it and
+attacks the real problem — too few ways of asking each question:
+
+1. **Paraphrase grammar** (`askalfonso/paraphrase.py`). Each question type has a few sentence
+   patterns with alternative words per slot: "What" × {problem, issue, pain point, challenge, need,
+   gap} × {does, did} × {solve, fix, tackle, address, target, go after}. ~8,000 grammar questions in
+   all, with the dataset's own answers and gold chunks.
+2. **Fresh every epoch** (`--paraphrases 6`): each (question type, project/company) pair draws 6
+   new phrasings per epoch — too many to memorize, like the invented projects. Invented projects
+   draw from the grammar too.
+3. **Strict leak filter.** A generated phrasing is dropped if it's close to any dev, test or stress
+   phrasing of its type, by word overlap *or* by content words (function words removed, words
+   compared by stem): "Summarize {t}." is dropped because the test asks "Give me a summary of {t}."
+   "motivation" never appears in training for the problem type, because the test uses it.
+
+**Caveat, stated plainly:** the grammar, the stress set and the earlier templates were all written
+by the same author (Claude), who had seen the dev and test phrasings. The filter removes close
+matches, but shared style can't be filtered out. Test remains the reference number.
