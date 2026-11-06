@@ -71,6 +71,9 @@ const mustAnswer: [string, RegExp][] = [
   ["Who is Juan Alfonso Vega Sol?", /Computer Science student/],
   ["What did he build at HackMX?", /IdentifEye/],
   ["What are his AI skills?", /^(?!.*I'm not sure)/],
+  ["when he won a hackathon?", /HackMX/],
+  ["when he won the liverpool hackathon?", /2025/],
+  ["how it answered?", /built from scratch/],
 ];
 let behaviorFailed = 0;
 for (const [q, expected] of mustAnswer) {

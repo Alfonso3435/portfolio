@@ -59,6 +59,7 @@ const ABOUT_X =
 const SKILL_WORDS =
   /\b(skills?|experience[ds]?|know|knows|familiar|background|good at|expertise|strong|proficient|work(?:ed)? with|used?|capable)\b/i;
 const LEADING = /^(?:the|his|a|an)\s+/i;
+const WIN_WORDS = /\b(when|win|wins|won|winning|place[ds]?|prizes?|awards?|results?|compete[ds]?|hackathons?|challenges?)\b/i;
 // "and what did he build at HackMX?" is a new question, not a follow-up subject.
 const QUESTION_START = /^(?:what|which|who|where|when|why|how|does|did|do|is|was|are|can|could|has|have|tell|list|show|give)\b/i;
 
@@ -76,6 +77,7 @@ export class QueryRewriter {
     query.names.project.forEach((n) => add(n, "project"));
     query.names.company.forEach((n) => add(n, "company"));
     query.names.event.forEach((n) => add(n, "event"));
+    query.events.forEach((e) => e.aliases.forEach((a) => add(a, "event", e.name)));
     // Longest first: "ASP.NET Core MVC" wins over its alias "ASP.NET", "Node.js" over "Node".
     this.entries.sort((a, b) => b.text.length - a.text.length);
   }
@@ -100,13 +102,17 @@ export class QueryRewriter {
     return ms.length === 1 && ms[0].start === 0 && ms[0].end === t.length ? ms[0] : undefined;
   }
 
-  /** Replace other names with the names the model knows (".NET Core" → "ASP.NET Core MVC"). */
+  /** Replace other names with the names the model knows (".NET Core" → "ASP.NET Core MVC",
+   *  "Liverpool hackathon" → "HackMX"). */
   private canonicalize(text: string): string {
     let out = "";
     let last = 0;
     for (const m of this.matches(text)) {
-      if (m.entry.kind !== "alias") continue;
-      out += text.slice(last, m.start) + m.entry.canonical;
+      const renamed = m.entry.kind === "alias" || (m.entry.kind === "event" && m.entry.canonical !== m.entry.text);
+      if (!renamed) continue;
+      let before = text.slice(last, m.start);
+      if (m.entry.kind === "event") before = before.replace(/\bthe\s+$/i, ""); // "the Liverpool hackathon" → "HackMX"
+      out += before + m.entry.canonical;
       last = m.end;
     }
     return out + text.slice(last);
@@ -114,7 +120,7 @@ export class QueryRewriter {
 
   /** A question about one name, in a phrasing the model was trained on. */
   private questionFor(m: Match, fallback: string): string {
-    const name = m.entry.kind === "alias" ? m.entry.canonical : m.entry.text;
+    const name = m.entry.canonical;
     switch (m.entry.kind) {
       case "tech":
       case "alias":
@@ -167,6 +173,14 @@ export class QueryRewriter {
     const named = about ? this.whole(about[1]) : bare;
     if (named && named.entry.kind !== "group") {
       if (named.entry.kind !== "tech" || !about || bare) q = this.questionFor(named, q);
+    }
+
+    // 3b. "when did he win the Liverpool hackathon?" → the event question (its answer has the date).
+    const mentioned = this.matches(q);
+    const events = mentioned.filter((m) => m.entry.kind === "event");
+    if (events.length === 1 && mentioned.length === 1) {
+      const rest = q.slice(0, events[0].start) + q.slice(events[0].end); // not "hackathon" inside the name itself
+      if (WIN_WORDS.test(rest)) q = this.questionFor(events[0], q);
     }
 
     // 4. A skills question about a whole area ("AI", "web development") and nothing more specific.

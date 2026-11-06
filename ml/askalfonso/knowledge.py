@@ -144,6 +144,11 @@ class Knowledge:
             if award:
                 parts.append(f"{award['placement']} at {award['event']} ({award['year']})")
             facts[f"project/{proj['slug']}"] = " ".join(parts)
+        # "What has he won?" is answered with *every* award, but only 3 chunks fit in the
+        # context: any award chunk vouches for the whole (short, fixed) list of awards.
+        all_awards = " ".join(f"{a['placement']} at {a['event']} ({a['year']}), {a['title']}." for a in self.awards)
+        for a in self.awards:
+            facts[f"award/{a['id']}"] = all_awards
         return facts
 
     def skill_mismatches(self) -> list[str]:
@@ -283,7 +288,8 @@ class Knowledge:
                 f"{a['placement']} — {a['title']}, at {a['event']} ({a['year']}), organized by {a['organizer']}. "
                 f"{as_he_sentence(to_third_person(a['summary']))}",
                 "awards.ts",
-                award_aliases(a["event"]),
+                # Event names, the challenge's title and other names from awards.ts ("Liverpool hackathon").
+                list(dict.fromkeys([*award_aliases(a["event"]), a["title"], *a.get("aliases", [])])),
             )
             for a in self.awards
         ]

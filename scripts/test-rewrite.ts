@@ -35,6 +35,13 @@ const cases: [string, string, string][] = [
   // skill groups
   ["What are his AI skills?", "", "What are his machine learning & deep learning skills?"],
   ["Is he good at web development?", "", "What are his full-stack development skills?"],
+  // events by other names
+  ["when he won the liverpool hackathon?", "", "What did he win at HackMX?"],
+  ["Did he win the Atrato hackathon?", "", "What did he win at Atrato?"],
+  ["when did he win ThinkCity?", "", "What did he win at ThinkCity?"],
+  ["What did he build at the Liverpool hackathon?", "", "What did he build at HackMX?"],
+  ["Who was on his team at the Atrato hackathon?", "", "Who was on his team at Atrato?"],
+  ["when he won a hackathon?", "", "when he won a hackathon?"],
   // left alone
   ["What is machine learning?", "", "What is machine learning?"], // a definition: off-topic, the model refuses
   ["What is React?", "", "What is React?"],

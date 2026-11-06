@@ -12,6 +12,7 @@ export const awards: Award[] = [
     projectSlug: "skysar",
     summary:
       "Won the Community Impact Award with SkySAR, an AI-powered drone-swarm concept for search and rescue, built by an interdisciplinary, international team.",
+    aliases: ["ThinkCity hackathon", "Smart City Hackathon"],
   },
   {
     id: "mlv-2025",
@@ -35,6 +36,7 @@ export const awards: Award[] = [
     projectSlug: "identifeye",
     summary:
       "Won 1st place as team HanLovers, out of 100+ competing teams, with IdentifEye, a visual product search that matches customer photos to Liverpool's catalog.",
+    aliases: ["Liverpool hackathon", "Liverpool challenge", "Liverpool AI Challenge"],
   },
   {
     id: "atrato-2024",
@@ -47,5 +49,6 @@ export const awards: Award[] = [
     projectSlug: "financeai",
     summary:
       "Won 1st place as team Silly Ducks with FinanceAI, an AI assistant for financial products with expert matching and embedding-based cost optimization.",
+    aliases: ["Atrato hackathon"],
   },
 ];

@@ -80,6 +80,7 @@ export interface KnowledgeJson {
     groups: { name: string; aliases: string[] }[];
     techs: string[];
     names: { project: string[]; company: string[]; event: string[] };
+    events: { name: string; aliases: string[] }[];
   };
   site: string;
 }

@@ -145,6 +145,8 @@ export interface Award {
   year: number;
   projectSlug?: string;
   summary: string;
+  /** Other names visitors use ("Liverpool hackathon" for HackMX). Ask Alfonso only. */
+  aliases?: string[];
 }
 
 export interface Skill {

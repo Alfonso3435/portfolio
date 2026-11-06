@@ -53,7 +53,7 @@ function sourceHref(id: string): string {
 
 /** Turn URLs and the email in an answer into links; case-study URLs stay on the site. */
 function linkify(text: string, email: string): ReactNode[] {
-  const parts = text.split(/(https?:\/\/[^\s]+?(?=[.,;)]?(?:\s|$))|alfonsovegasol\.com\/projects(?:\/[a-z0-9-]+)?|[\w.+-]+@[\w-]+\.[\w.]+[a-z])/i);
+  const parts = text.split(/(https?:\/\/[^\s]+?(?=[.,;)]?(?:\s|$))|alfonsovegasol\.com\/[a-z0-9/-]*[a-z0-9]|[\w.+-]+@[\w-]+\.[\w.]+[a-z])/i);
   return parts.map((part, i) => {
     if (i % 2 === 0) return part;
     if (part.startsWith("http")) {
@@ -111,7 +111,9 @@ function HowItAnswered({ reply }: { reply: Reply }) {
         ) : null}
         <dt>Guardrails</dt>
         <dd>
-          {d.reason === "private_guard"
+          {d.reason === "about_assistant"
+            ? "a question about the assistant itself: fixed answer, the model didn't run"
+            : d.reason === "private_guard"
             ? "personal topic: refused before the model ran"
             : d.reason
               ? `replaced the answer (${d.reason.replaceAll("_", " ")}${d.ungrounded?.length ? `: ${d.ungrounded.join(", ")}` : ""})`

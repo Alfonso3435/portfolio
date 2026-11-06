@@ -142,6 +142,9 @@ def export_query(kb: Knowledge) -> dict:
             "company": sorted({j["company"] for j in kb.experience}),
             "event": sorted({n for a in kb.awards for n in award_aliases(a["event"])}),
         },
+        # Other names for an event → the short name the model knows ("Liverpool hackathon" → "HackMX").
+        "events": [{"name": award_aliases(a["event"])[-1], "aliases": [a["title"], *a.get("aliases", [])]}
+                   for a in kb.awards],
     }
 
 

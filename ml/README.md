@@ -548,3 +548,15 @@ guardrails replaced its answer. The chat said "the model wasn't sure", which was
    already cached): ~18% less work per question, same answers.
 
 Parity is still 86/86, plus behavior checks that both implementations would miss if they shared a bug.
+
+**Second round of real conversations:**
+- "when he won a hackathon?" — the model correctly listed all four awards, but only three chunks fit in
+  the context, so the grounding check blocked the fourth. Any award chunk now vouches for the full
+  list of awards (`Knowledge.grounding_facts`): it's short, fixed and all in the data.
+- "when he won the liverpool hackathon?" — "Liverpool hackathon" wasn't a name the data used. Awards
+  now have `aliases` in `awards.ts`, retrieval indexes the challenge title too, and the rewriter maps
+  other event names to the one the model knows ("…liverpool hackathon?" → "What did he win at HackMX?",
+  whose answer includes the year).
+- "how it answered?" — questions about the assistant itself get a fixed, factual description of how it
+  works (the model would rightly refuse them: they're not about Alfonso).
+- "how old is alfonso?" — refused before the model runs. Working as intended: age is personal.

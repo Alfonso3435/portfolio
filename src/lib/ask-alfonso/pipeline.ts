@@ -14,6 +14,9 @@ import { QueryRewriter } from "./rewrite";
 import { Tokenizer } from "./tokenizer";
 import type { KnowledgeJson, ModelJson, Reply } from "./types";
 
+const ABOUT_ASSISTANT =
+  /\b(?:how (?:do|did|does) (?:you|it|this) (?:work|answer|know|decide)|how (?:were|was|are) (?:you|it|this) (?:built|made|trained|programmed)|who (?:made|built|created|trained) (?:you|this|it)|are you (?:an? )?(?:ai|bot|llm|gpt|chatgpt|chatbot)|what model are you)\b|^how (?:it|you) answered\??$/i;
+
 export class AskAlfonso {
   readonly tokenizer: Tokenizer;
   readonly model: Model;
@@ -26,6 +29,7 @@ export class AskAlfonso {
   private readonly prompt: ModelJson["tokenizer"]["prompt"];
   private readonly endId: number;
   private readonly rewriter: QueryRewriter;
+  private readonly aboutAssistant: string;
 
   constructor(modelJson: ModelJson, weights: Float32Array, knowledge: KnowledgeJson) {
     this.tokenizer = new Tokenizer(modelJson.tokenizer);
@@ -40,6 +44,12 @@ export class AskAlfonso {
     this.prompt = modelJson.tokenizer.prompt;
     this.endId = this.tokenizer.tokenId(this.prompt.end);
     this.rewriter = new QueryRewriter(knowledge.query);
+    const params = (modelJson.parameters / 1e6).toFixed(1);
+    this.aboutAssistant =
+      `I'm a ${params}M-parameter language model Alfonso built from scratch: tokenizer, transformer, training and ` +
+      `retrieval. For each question I find the most relevant parts of his profile, read them and answer only from ` +
+      `them; guardrails block anything that isn't in his data. Open "How it answered" under any reply to see those ` +
+      `steps, or read the full story at ${knowledge.site}/lab.`;
   }
 
   /**
@@ -48,6 +58,12 @@ export class AskAlfonso {
    * last question that was answered, so "what about X?" can be resolved.
    */
   chat(message: string, previous?: string): Reply {
+    // Questions about the assistant itself aren't in Alfonso's data, so the model would
+    // (correctly) refuse them. A fixed, factual answer about how it works is more useful.
+    if (ABOUT_ASSISTANT.test(message.trim())) {
+      return { answer: this.aboutAssistant, status: "answered", sources: [], question: message.trim(),
+        rewritten: false, debug: { reason: "about_assistant" } };
+    }
     const { question, changed } = this.rewriter.rewrite(message, previous);
     return { ...this.ask(question), question, rewritten: changed };
   }
