@@ -9,11 +9,13 @@ export const profile: Profile = {
   summary:
     "I'm a Computer Science student at the University of Washington's Paul G. Allen School, specializing in AI and machine learning. I've won 1st place at HackMX's Liverpool AI Challenge and Atrato's Financial Hackathon with products built on computer vision, LLMs and embeddings, and I founded Answr and ZapTap, where I ship real software to real customers.",
   location: "Seattle Area, WA",
-  email: "ponchovegasol@gmail.com",
+  email: "javs3@uw.edu",
   siteUrl: "https://alfonsovegasol.com",
   // TODO(Alfonso): add your resume as public/resume.pdf
   resumeUrl: "/resume.pdf",
   assistantName: "Ask Alfonso",
+  // TODO(Alfonso): add your headshot as public/headshot.jpg and uncomment (hero circle + About photo)
+  // headshot: "/headshot.jpg",
   links: {
     github: "https://github.com/Alfonso3435",
     linkedin: "https://www.linkedin.com/in/juan-alfonso-vega-sol-752284285/",

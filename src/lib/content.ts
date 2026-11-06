@@ -3,8 +3,17 @@
 // arrays themselves, so every page answers them the same way.
 import { awards } from "@/data/awards";
 import { experience } from "@/data/experience";
-import { projects } from "@/data/projects";
-import type { Award, Project, ProjectCategory } from "@/lib/types";
+import { projects as allProjects } from "@/data/projects";
+import { hiddenProjectSlugs } from "@/lib/features";
+import type { Award, Project, ProjectCategory, Skill } from "@/lib/types";
+
+/** Every project visitors can see (src/lib/features.ts hides some until their launch). */
+export const projects: Project[] = allProjects.filter((p) => !hiddenProjectSlugs.has(p.slug));
+
+/** The visible projects that prove a skill. */
+export function getSkillProjectSlugs(skill: Skill): string[] {
+  return skill.projectSlugs.filter((slug) => !hiddenProjectSlugs.has(slug));
+}
 
 export const categoryLabels: Record<ProjectCategory, string> = {
   "ai-ml": "AI / ML",

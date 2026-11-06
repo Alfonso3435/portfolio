@@ -560,3 +560,19 @@ Parity is still 86/86, plus behavior checks that both implementations would miss
 - "how it answered?" — questions about the assistant itself get a fixed, factual description of how it
   works (the model would rightly refuse them: they're not about Alfonso).
 - "how old is alfonso?" — refused before the model runs. Working as intended: age is personal.
+
+### A new contact email without retraining
+
+Alfonso's contact address changed after v6 was trained, and the model learned the old one
+(it appears in 567 training answers: contact info, "I don't know — ask him at …" refusals).
+Retraining for one string would cost a full run, so the pipeline translates instead:
+
+- The model keeps seeing the world it was trained on: chunks are shown with the old address
+  (`TRAINED_EMAIL` in `askalfonso/pipeline.py`), so retrieval, prompts, outputs and the
+  guardrails are byte-for-byte what Phase 6 evaluated.
+- Every reply swaps in the current address (`Knowledge.email`, from `src/data/profile.ts`) on
+  the way out, in Python (`AskAlfonso.to_visitor`) and in the browser (`knowledge.json → contact`).
+
+The re-export changed nothing but the address: same `model.bin`, same prompt token ids, same
+retrieval and the same 86 reference statuses. The dataset in `ml/data/` already uses the new
+address, so the next retraining should set `TRAINED_EMAIL = None`.

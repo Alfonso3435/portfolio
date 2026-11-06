@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Chip } from "@/components/ui/Chip";
 import { Container } from "@/components/ui/Container";
 import { labSteps, labTools } from "@/data/lab";
 import { profile } from "@/data/profile";
+import { features } from "@/lib/features";
 import type { LabToolStatus } from "@/lib/types";
 
 export const metadata: Metadata = {
+  // Hidden until launch (src/lib/features.ts): keep it out of search results too.
+  ...(features.lab ? {} : { robots: { index: false, follow: false } }),
   title: "Lab",
   description: `${profile.assistantName}, a language model built from scratch, and other interactive ML tools.`,
 };
@@ -18,6 +22,7 @@ const statusLabels: Record<LabToolStatus, string> = {
 };
 
 export default function LabPage() {
+  if (!features.lab) notFound();
   const tools = [...labTools].sort((a, b) => a.priority - b.priority);
 
   return (

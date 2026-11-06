@@ -74,6 +74,7 @@ const mustAnswer: [string, RegExp][] = [
   ["when he won a hackathon?", /HackMX/],
   ["when he won the liverpool hackathon?", /2025/],
   ["how it answered?", /built from scratch/],
+  ["How can I contact him?", /javs3@uw\.edu/],
 ];
 let behaviorFailed = 0;
 for (const [q, expected] of mustAnswer) {
@@ -81,6 +82,15 @@ for (const [q, expected] of mustAnswer) {
   const ok = reply.status === "answered" && expected.test(reply.answer);
   if (!ok) behaviorFailed++;
   console.log(`${ok ? "✓" : "✗"} must answer: ${q} → [${reply.status}] ${reply.answer.slice(0, 80)}`);
+}
+
+// The model was trained with an older address; every reply (answer, refusal, fallback)
+// must show the current one (knowledge.contact).
+for (const q of ["How can I contact him?", "Does he know Rust?", "What's his favorite color?", "What's his phone number?"]) {
+  const reply = bot.chat(q);
+  const ok = reply.answer.includes(knowledge.contact.email) && !reply.answer.includes(knowledge.contact.model_email);
+  if (!ok) behaviorFailed++;
+  console.log(`${ok ? "✓" : "✗"} current email: ${q} → [${reply.status}] ${reply.answer.slice(0, 90)}`);
 }
 
 times.sort((a, b) => a - b);

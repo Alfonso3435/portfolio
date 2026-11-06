@@ -1,12 +1,13 @@
 import type { MetadataRoute } from "next";
 import { profile } from "@/data/profile";
-import { projects } from "@/data/projects";
+import { projects } from "@/lib/content";
+import { features } from "@/lib/features";
 import { navItems } from "@/lib/nav";
 
 // Served at /sitemap.xml. Tells Google every page that exists, including each
 // case study — new projects in projects.ts are added automatically.
 export default function sitemap(): MetadataRoute.Sitemap {
-  const pages = [...navItems, { href: "/ask" }].map((item) => ({
+  const pages = [...navItems, ...(features.lab ? [{ href: "/ask" }] : [])].map((item) => ({
     url: `${profile.siteUrl}${item.href === "/" ? "" : item.href}`,
     priority: item.href === "/" ? 1 : 0.8,
   }));

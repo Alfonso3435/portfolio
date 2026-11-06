@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { skillGroups } from "@/data/skills";
-import { getProject } from "@/lib/content";
+import { getProject, getSkillProjectSlugs } from "@/lib/content";
 
 export function SkillsGrid() {
   return (
@@ -20,10 +20,10 @@ export function SkillsGrid() {
                 <li key={skill.name} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
                   <span className="text-[15px]">{skill.name}</span>
                   <span className="flex flex-wrap gap-x-2 text-sm">
-                    {skill.projectSlugs.length === 0 ? (
+                    {getSkillProjectSlugs(skill).length === 0 ? (
                       <span className="text-muted">Coursework</span>
                     ) : (
-                      skill.projectSlugs.slice(0, 3).map((slug) => (
+                      getSkillProjectSlugs(skill).slice(0, 3).map((slug) => (
                         <Link key={slug} href={`/projects/${slug}`} className="text-accent hover:text-fg">
                           {getProject(slug)?.title ?? slug}
                         </Link>

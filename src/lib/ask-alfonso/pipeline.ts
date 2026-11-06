@@ -88,6 +88,15 @@ export class AskAlfonso {
     return { hits, kept };
   }
 
+  /**
+   * The model's text with the email it was trained on replaced by the current one
+   * (see TRAINED_EMAIL in ml/askalfonso/pipeline.py): Alfonso's address changed after training.
+   */
+  private toVisitor(text: string): string {
+    const { email, model_email } = this.k.contact;
+    return model_email && model_email !== email ? text.replaceAll(model_email, email) : text;
+  }
+
   /** Drop the weakest chunk until the prompt leaves room for the answer. */
   private fitContext(kept: Hit[], question: string): Hit[] {
     const budget = this.model.cfg.block_size - this.k.pipeline.max_new_tokens;
@@ -125,7 +134,7 @@ export class AskAlfonso {
     const debug: Reply["debug"] = {
       hits: hits.map((h) => [h.id, Math.round(h.score * 1000) / 1000]),
       contextIds: kept.map((h) => h.id),
-      raw,
+      raw: this.toVisitor(raw),
       finished,
       reason: check.reason,
       ungrounded: check.ungrounded,
@@ -133,8 +142,9 @@ export class AskAlfonso {
       ms: Math.round(performance.now() - started),
     };
     if (!check.ok) return { answer: g.fallback, status: "fallback", sources: [], debug };
-    if (this.guard.isRefusal(raw)) return { answer: raw, status: "refused", sources: [], debug };
+    const answer = this.toVisitor(raw);
+    if (this.guard.isRefusal(raw)) return { answer, status: "refused", sources: [], debug };
     const sources = this.guard.isGreeting(raw) ? [] : kept.map((h) => ({ id: h.id, title: h.title }));
-    return { answer: raw, status: "answered", sources, debug };
+    return { answer, status: "answered", sources, debug };
   }
 }

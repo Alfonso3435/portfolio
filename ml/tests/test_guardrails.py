@@ -130,6 +130,18 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(reply.status, "fallback")
         self.assertIn("a@b.co", reply.answer)
 
+    def test_trained_email_is_swapped_for_the_current_one(self):
+        # The checkpoint learned an older address (pipeline.TRAINED_EMAIL); visitors see the current one.
+        from askalfonso.pipeline import TRAINED_EMAIL
+        if not TRAINED_EMAIL:
+            self.skipTest("the checkpoint was trained with the current email")
+        bot = self.make_bot({"Does he know Haskell?": f"I don't have any information about Haskell in Alfonso's "
+                                                      f"profile. You can ask him directly at {TRAINED_EMAIL}."})
+        reply = bot.ask("Does he know Haskell?")
+        self.assertEqual(reply.status, "refused")
+        self.assertIn("a@b.co", reply.answer)
+        self.assertNotIn(TRAINED_EMAIL, reply.answer + reply.debug["raw"])
+
     def test_grounding_facts_count_as_grounded(self):
         bot = self.make_bot({"Is there a link to IdentifEye?":
                              "The full case study is at alfonsovegasol.com/projects/identifeye."})

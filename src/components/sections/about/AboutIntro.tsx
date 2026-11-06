@@ -12,7 +12,7 @@ export function AboutIntro() {
     <section aria-labelledby="about-title" className="flex flex-wrap items-start gap-10">
       {profile.headshot ? (
         <div className="relative aspect-[4/5] w-full max-w-[280px] overflow-hidden rounded-2xl border border-line">
-          <Image src={profile.headshot} alt={profile.name} fill sizes="280px" priority className="object-cover" />
+          <Image src={profile.headshot} alt={profile.name} fill sizes="280px" preload className="object-cover" />
         </div>
       ) : null}
       <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-5">

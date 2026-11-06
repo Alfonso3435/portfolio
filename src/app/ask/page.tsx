@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AskChat } from "@/components/ask/AskChat";
 import { Container } from "@/components/ui/Container";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { profile } from "@/data/profile";
+import { features } from "@/lib/features";
 
 export const metadata: Metadata = {
+  // Hidden until launch (src/lib/features.ts): keep it out of search results too.
+  ...(features.lab ? {} : { robots: { index: false, follow: false } }),
   title: profile.assistantName,
   description: `Ask questions about ${profile.name}'s projects, skills and experience. ${profile.assistantName} is a small language model he built from scratch; it runs entirely in your browser.`,
 };
@@ -20,6 +24,7 @@ const suggestions = [
 ];
 
 export default function AskPage() {
+  if (!features.lab) notFound();
   return (
     <Container className="flex flex-col gap-10 py-16 pb-24">
       <PageIntro eyebrow="Ask" title={`${profile.assistantName}`}>

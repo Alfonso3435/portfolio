@@ -1,8 +1,7 @@
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { projects } from "@/data/projects";
-import { getFeaturedProjects } from "@/lib/content";
+import { getFeaturedProjects, projects } from "@/lib/content";
 
 export function FeaturedProjects() {
   return (

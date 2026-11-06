@@ -83,6 +83,8 @@ export interface KnowledgeJson {
     events: { name: string; aliases: string[] }[];
   };
   site: string;
+  /** The model writes model_email (the address it was trained with); replies show email. */
+  contact: { email: string; model_email: string };
 }
 
 export type ReplyStatus = "answered" | "refused" | "private" | "fallback";

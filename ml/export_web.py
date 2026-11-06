@@ -119,6 +119,8 @@ def export_knowledge(bot: AskAlfonso, kb: Knowledge) -> dict:
         },
         "query": export_query(kb),
         "site": SITE,
+        # The model writes model_email (the address it was trained with); replies show email.
+        "contact": {"email": bot.email, "model_email": bot.model_email},
     }
 
 

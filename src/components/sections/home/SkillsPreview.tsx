@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { skillGroups } from "@/data/skills";
-import { getProject } from "@/lib/content";
+import { getProject, getSkillProjectSlugs } from "@/lib/content";
 
 // Home shows the first 3 groups and their first 4 proven skills; About shows everything.
 const GROUPS_ON_HOME = 3;
@@ -11,7 +11,10 @@ const SKILLS_PER_GROUP = 4;
 export function SkillsPreview() {
   const groups = skillGroups.slice(0, GROUPS_ON_HOME).map((group) => ({
     name: group.name,
-    skills: group.skills.filter((s) => s.projectSlugs.length > 0).slice(0, SKILLS_PER_GROUP),
+    skills: group.skills
+      .map((s) => ({ name: s.name, projectSlugs: getSkillProjectSlugs(s) }))
+      .filter((s) => s.projectSlugs.length > 0)
+      .slice(0, SKILLS_PER_GROUP),
   }));
 
   return (

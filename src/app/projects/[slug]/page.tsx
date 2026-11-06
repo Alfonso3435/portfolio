@@ -7,8 +7,7 @@ import { ProjectVideo } from "@/components/projects/ProjectVideo";
 import { Chip } from "@/components/ui/Chip";
 import { Container } from "@/components/ui/Container";
 import { profile } from "@/data/profile";
-import { projects } from "@/data/projects";
-import { getAdjacentProjects, getAward, getProject, getProjectBadge } from "@/lib/content";
+import { getAdjacentProjects, getAward, getProject, getProjectBadge, projects } from "@/lib/content";
 import { formatTeamSize } from "@/lib/format";
 
 interface CaseStudyProps {

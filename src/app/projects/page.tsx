@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ProjectFilter } from "@/components/projects/ProjectFilter";
 import { Container } from "@/components/ui/Container";
 import { PageIntro } from "@/components/ui/PageIntro";
-import { projects } from "@/data/projects";
+import { projects } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Projects",

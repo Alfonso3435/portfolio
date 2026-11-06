@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { certifications } from "@/data/certifications";
 import { profile } from "@/data/profile";
+import { features } from "@/lib/features";
 import { formatYearMonth } from "@/lib/format";
 
 export function LearningPath() {
@@ -14,21 +15,23 @@ export function LearningPath() {
           Learning path
         </h2>
         <p className="text-muted">
-          Each course fed the next project, all leading to a language model built from scratch.
+          Each course fed the next project{features.lab ? ", all leading to a language model built from scratch" : ""}.
         </p>
       </div>
 
       <ol className="ml-1.5 flex flex-col border-l-2 border-line">
-        <li className="relative pb-6 pl-6">
-          <span aria-hidden="true" className="absolute top-1.5 -left-[7px] size-3 rounded-full bg-accent" />
-          <p className="font-mono text-xs text-accent">NOW</p>
-          <p className="mt-0.5 font-medium">
-            {profile.assistantName}: a transformer built from scratch{" "}
-            <Link href="/lab" className="text-accent hover:text-fg">
-              → see the Lab
-            </Link>
-          </p>
-        </li>
+        {features.lab ? (
+          <li className="relative pb-6 pl-6">
+            <span aria-hidden="true" className="absolute top-1.5 -left-[7px] size-3 rounded-full bg-accent" />
+            <p className="font-mono text-xs text-accent">NOW</p>
+            <p className="mt-0.5 font-medium">
+              {profile.assistantName}: a transformer built from scratch{" "}
+              <Link href="/lab" className="text-accent hover:text-fg">
+                → see the Lab
+              </Link>
+            </p>
+          </li>
+        ) : null}
         {sorted.map((cert) => (
           <li key={cert.title} className="relative pb-6 pl-6 last:pb-0">
             <span aria-hidden="true" className="absolute top-1.5 -left-[7px] size-3 rounded-full bg-line" />

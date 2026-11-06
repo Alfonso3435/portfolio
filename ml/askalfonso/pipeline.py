@@ -36,6 +36,14 @@ from .retrieval import (
 )
 from .training_data import CONTEXT_SEPARATOR
 
+# The contact email the current checkpoint (v6) was trained with. Alfonso's email changed
+# after training. Retraining just for that would cost a full run, so instead the model
+# keeps seeing the world it learned (chunks with the old address, so retrieval, prompts
+# and guardrails behave exactly as evaluated) and every reply swaps in the current
+# address (Knowledge.email) on the way out. Set this to None after the next retraining,
+# whose data already uses the new address.
+TRAINED_EMAIL: str | None = "ponchovegasol@gmail.com"
+
 
 @dataclass
 class PipelineConfig:
@@ -57,9 +65,13 @@ class Reply:
 class AskAlfonso:
     def __init__(self, model, tok, chunks: list[dict], email: str, name: str = "Alfonso",
                  assistant: str = "Ask Alfonso", config: PipelineConfig | None = None,
-                 facts: dict[str, str] | None = None):
+                 facts: dict[str, str] | None = None, trained_email: str | None = TRAINED_EMAIL):
         self.model, self.tok = model, tok
         self.cfg = config or PipelineConfig()
+        # What the model writes for the email (`model_email`) vs. what visitors should see.
+        self.model_email = trained_email or email
+        if self.model_email != email:
+            chunks = [{**c, "text": c["text"].replace(email, self.model_email)} for c in chunks]
         self.retriever = TfidfRetriever(chunks)
         self.texts = {c["id"]: c["text"] for c in chunks}
         self.titles = {c["id"]: c["title"] for c in chunks}
@@ -71,7 +83,7 @@ class AskAlfonso:
         self.fallback = (f"I'm not sure about that — I can only answer questions about {name}'s projects, "
                          f"skills and experience. You can reach him at {email}.")
         # Names the fixed refusal/greeting messages use, which never come from a chunk.
-        self.allowlist = " ".join([assistant, name, email, SITE, f"{SITE}/projects", "HackMX"])
+        self.allowlist = " ".join([assistant, name, email, self.model_email, SITE, f"{SITE}/projects", "HackMX"])
         # Every name the knowledge base knows (with a capital letter, so topic words like
         # "education" don't count). A fact may only mention the ones in its context.
         # Entities only, not chunk titles: a title like "Founder at ZapTap" is a label we
@@ -121,6 +133,10 @@ class AskAlfonso:
             self._cache[key] = generate_answer(self.model, self.tok, context, question, self.cfg.max_new_tokens)
         return self._cache[key]
 
+    def to_visitor(self, text: str) -> str:
+        """The model's text with the address it was trained on replaced by the current one."""
+        return text.replace(self.model_email, self.email) if self.model_email != self.email else text
+
     # ── the whole thing ────────────────────────────────────────────────────────────
     def ask(self, question: str) -> Reply:
         question = question.strip()
@@ -137,14 +153,15 @@ class AskAlfonso:
         debug = {
             "hits": [(h.chunk_id, round(h.score, 3)) for h in hits],
             "context_ids": [h.chunk_id for h in kept],
-            "raw": raw,
+            "raw": self.to_visitor(raw),
             "finished": finished,
             "reason": check.reason,
             "ungrounded": list(check.ungrounded),
         }
         if self.cfg.guards and not check.ok:
             return Reply(self.fallback, "fallback", debug=debug)
+        answer = self.to_visitor(raw)
         if is_refusal(raw):
-            return Reply(raw, "refused", debug=debug)
+            return Reply(answer, "refused", debug=debug)
         # A greeting or a fact: show the chunks it came from (none for a greeting).
-        return Reply(raw, "answered", sources=[] if is_greeting(raw) else kept, debug=debug)
+        return Reply(answer, "answered", sources=[] if is_greeting(raw) else kept, debug=debug)

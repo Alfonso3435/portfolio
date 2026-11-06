@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { profile } from "@/data/profile";
+import { features } from "@/lib/features";
 
 export function SiteFooter() {
   return (
@@ -25,11 +26,13 @@ export function SiteFooter() {
               Email
             </a>
           </li>
-          <li>
-            <Link href="/lab" className="text-accent hover:text-fg">
-              How I built this →
-            </Link>
-          </li>
+          {features.lab ? (
+            <li>
+              <Link href="/lab" className="text-accent hover:text-fg">
+                How I built this →
+              </Link>
+            </li>
+          ) : null}
         </ul>
       </Container>
     </footer>

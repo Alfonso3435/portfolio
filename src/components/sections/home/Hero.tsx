@@ -1,4 +1,4 @@
-import { AskTeaser } from "@/components/sections/home/AskTeaser";
+import { HeroHeadshot } from "@/components/sections/home/HeroHeadshot";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Container } from "@/components/ui/Container";
 import { profile } from "@/data/profile";
@@ -35,7 +35,7 @@ export function Hero() {
             </ButtonLink>
           </div>
         </div>
-        <AskTeaser />
+        <HeroHeadshot />
       </Container>
     </section>
   );
