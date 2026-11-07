@@ -112,6 +112,7 @@ def export_knowledge(bot: AskAlfonso, kb: Knowledge) -> dict:
             "greeting_prefix": G.GREETING_PREFIX,
             "common_capitalized": sorted(G.COMMON_CAPITALIZED),
             "generic_acronyms": sorted(G.GENERIC_ACRONYMS),
+            "status_claims": list(G.STATUS_CLAIMS),
             "allowlist": bot.allowlist,
             "known_names": bot.known_names,
             "private_answer": bot.private_answer,

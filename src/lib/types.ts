@@ -176,14 +176,6 @@ export interface Certification {
 
 // ── Lab page ────────────────────────────────────────────────────────────────
 
-export interface LabStep {
-  label: string;
-  title: string;
-  description: string;
-  /** The course or past project this step builds on. */
-  foundation?: string;
-}
-
 export type LabToolStatus = "planned" | "in-progress" | "live";
 
 export interface LabTool {

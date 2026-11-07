@@ -130,6 +130,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(reply.status, "fallback")
         self.assertIn("a@b.co", reply.answer)
 
+    def test_status_claim_must_be_in_the_context(self):
+        from askalfonso.guardrails import check_answer
+        shipped = "Ask Alfonso: a small language model built from scratch."
+        unfinished = shipped + " Status: in progress."
+        answer = "Ask Alfonso: a small language model built from scratch. It's still in progress."
+        self.assertFalse(check_answer(answer, True, shipped, "What is Ask Alfonso?", "").ok)
+        self.assertTrue(check_answer(answer, True, unfinished, "What is Ask Alfonso?", "").ok)
+
     def test_trained_email_is_swapped_for_the_current_one(self):
         # The checkpoint learned an older address (pipeline.TRAINED_EMAIL); visitors see the current one.
         from askalfonso.pipeline import TRAINED_EMAIL

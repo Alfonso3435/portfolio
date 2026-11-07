@@ -6,7 +6,7 @@
 // every entry point comes back: the Lab tab, the header button, the home-page card, the
 // footer link, the Learning path entry, /ask, /lab, /projects/ask-alfonso and the sitemap.
 export const features = {
-  lab: false,
+  lab: true,
 } as const;
 
 /** Projects that only exist on the site while their feature is on. */

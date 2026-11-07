@@ -576,3 +576,33 @@ Retraining for one string would cost a full run, so the pipeline translates inst
 The re-export changed nothing but the address: same `model.bin`, same prompt token ids, same
 retrieval and the same 86 reference statuses. The dataset in `ml/data/` already uses the new
 address, so the next retraining should set `TRAINED_EMAIL = None`.
+
+## Phase 8 — the Lab page
+
+`alfonsovegasol.com/lab` explains the model to someone with a minute to spare: four headline
+numbers, the four steps of a question (each with the number that proves it), the architecture
+with its parameter breakdown, the training curves and version history, the test results and
+honest limitations.
+
+Every number about the shipped model is generated, not typed:
+
+```bash
+python ml/export_lab.py     # → src/data/lab-metrics.ts
+```
+
+It reads the shipped `model.json`/`model.bin`, the tokenizer, the dataset stats, the final
+run's training log (`ml/results/train_colab-v6.jsonl`) and the Phase 6 report. The version
+comparison (v4 / v5a / v5b / v6 on the stress set) comes from the Phase 4 tables above.
+
+Two data changes came with the launch, both checked against the frozen splits:
+
+- IdentifEye's case study gained a bullet ("optimized by 94% with concurrency and
+  parallelism"). The Q&A splits didn't change; dev stayed at 93.8%.
+- Ask Alfonso's own case study moved from "in progress" to "shipped" and got a live-demo
+  link. Split membership is unchanged, but four reference answers about Ask Alfonso changed
+  (dev 93.8% → 92.4% for v6, which still remembers "It's still in progress"). A new guardrail
+  blocks that stale claim: a status phrase like "in progress" must appear in what the model
+  read (`guardrails.STATUS_CLAIMS`). The Phase 6 test numbers are the frozen evaluation of v6.
+
+Adding new fields to a project (results, new stack items) does reshuffle the splits, because
+it changes how many questions are generated. Do that together with the next retraining.

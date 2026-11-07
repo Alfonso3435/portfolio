@@ -169,11 +169,17 @@ export function AskChat({ assistantName, shortName, email, suggestions }: AskCha
 
   // Start downloading as soon as the chat is on screen, and answer ?q=… links from other pages.
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    // load() runs on every mount: in development React mounts twice and the first
+    // unmount terminates the worker, so loading only once left the chat stuck at 0%.
     load();
     const q = new URLSearchParams(window.location.search).get("q");
-    if (q) void send(q);
+    if (!q || started.current) return;
+    // Deferred so the throwaway first mount in development can't send it to a dead worker.
+    const timer = setTimeout(() => {
+      started.current = true;
+      void send(q);
+    }, 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

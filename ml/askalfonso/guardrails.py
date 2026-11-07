@@ -174,6 +174,12 @@ def unsupported_names(answer: str, sources: str, known_names: Iterable[str]) -> 
     return out
 
 
+# Status claims the model learned while a project was unfinished. A project's chunk says
+# "Status: in progress." while it is; once it ships, a memorized "It's still in progress"
+# is out of date and must not be shown.
+STATUS_CLAIMS = ("in progress",)
+
+
 def check_answer(answer: str, finished: bool, context: str, question: str, allowlist: str,
                  known_names: Iterable[str] = ()) -> Check:
     if not answer:
@@ -202,5 +208,8 @@ def check_answer(answer: str, finished: bool, context: str, question: str, allow
     missing = ungrounded_tokens(answer, " ".join([context, allowlist]))
     if missing:
         return Check(False, "ungrounded", tuple(missing))
+    stale = [c for c in STATUS_CLAIMS if c in answer.lower() and c not in context.lower()]
+    if stale:
+        return Check(False, "ungrounded", tuple(stale))
     names = unsupported_names(answer, context, known_names)
     return Check(not names, "unsupported_name" if names else "", tuple(names))

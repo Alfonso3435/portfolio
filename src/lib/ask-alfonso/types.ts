@@ -69,6 +69,8 @@ export interface KnowledgeJson {
     greeting_prefix: string;
     common_capitalized: string[];
     generic_acronyms: string[];
+    /** Phrases like "in progress" that must appear in what the model read (guardrails.py). */
+    status_claims: string[];
     allowlist: string;
     known_names: string[];
     private_answer: string;

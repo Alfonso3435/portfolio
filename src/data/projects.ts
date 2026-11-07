@@ -21,7 +21,8 @@ export const projects: Project[] = [
       "Recommendations for related products using GPT-4 Vision.",
       "Embedding-based duplicate removal for a catalog of any size.",
       "Concurrent microservices on Google Cloud, so one failure never takes down the web app.",
-      "Live embedding storage in a database to optimize resources.",
+      // TODO(Alfonso): name what the 94% measures (e.g. processing time, cost) to make this sharper.
+      "Live embedding storage in a database, optimized by 94% with concurrency and parallelism.",
       "React + Vite front end hosted on Firebase and Google Cloud Run.",
     ],
     stack: ["Vertex AI", "GPT-4 Vision", "OpenCV", "Flask", "React", "Vite", "Google Cloud Run", "Firebase", "scikit-learn"],
@@ -138,7 +139,7 @@ export const projects: Project[] = [
       "A small language model built from scratch (BPE tokenizer, decoder-only transformer and retrieval) that answers questions about my work.",
     categories: ["ai-ml"],
     featured: false,
-    status: "in-progress",
+    status: "shipped",
     year: 2026,
     teamSize: 1,
     role: "Solo project",
@@ -148,9 +149,15 @@ export const projects: Project[] = [
       "A byte-pair-encoding tokenizer written from scratch.",
       "A decoder-only transformer: embeddings, causal multi-head self-attention, layer norm, MLP and residuals.",
       "TF-IDF retrieval that grounds every answer in this site's data, with a fallback when confidence is low.",
+      "Guardrails that check every name, date and number in an answer against what the model read.",
+      "A from-scratch TypeScript port that runs the whole pipeline in the visitor's browser.",
     ],
     stack: ["Python", "PyTorch", "NumPy", "TF-IDF"],
-    links: {},
+    // Results stay out of this entry on purpose: adding fields here changes the Q&A the
+    // model was evaluated on (ml/build_dataset.py). The numbers live on the Lab page.
+    links: {
+      demo: "https://alfonsovegasol.com/ask",
+    },
   },
   {
     slug: "financeai",

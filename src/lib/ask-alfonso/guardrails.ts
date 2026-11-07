@@ -146,6 +146,10 @@ export class Guardrails {
     }
     const missing = this.ungroundedTokens(answer, [context, this.cfg.allowlist].join(" "));
     if (missing.length) return fail("ungrounded", missing);
+    // A memorized "still in progress" about a project that has since shipped (guardrails.py: STATUS_CLAIMS).
+    const lower = context.toLowerCase();
+    const stale = this.cfg.status_claims.filter((c) => answer.toLowerCase().includes(c) && !lower.includes(c));
+    if (stale.length) return fail("ungrounded", stale);
     const names = this.unsupportedNames(answer, context);
     return names.length ? fail("unsupported_name", names) : pass;
   }
