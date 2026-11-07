@@ -130,6 +130,15 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(reply.status, "fallback")
         self.assertIn("a@b.co", reply.answer)
 
+    def test_trained_wording_is_corrected(self):
+        from askalfonso.pipeline import TRAINED_CORRECTIONS
+        if not TRAINED_CORRECTIONS:
+            self.skipTest("no corrections")
+        bot = self.make_bot({})
+        self.assertEqual(bot.to_visitor("He won 1st place as team HanLovers, out of 100+ competing teams, with IdentifEye."),
+                         "He won 1st place in Liverpool's challenge as team HanLovers, at a hackathon of 100+ teams, with IdentifEye.")
+        self.assertNotIn("competing", bot.to_visitor("They finished first out of 100+ competing teams."))
+
     def test_status_claim_must_be_in_the_context(self):
         from askalfonso.guardrails import check_answer
         shipped = "Ask Alfonso: a small language model built from scratch."

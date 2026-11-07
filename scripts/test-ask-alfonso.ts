@@ -75,6 +75,8 @@ const mustAnswer: [string, RegExp][] = [
   ["when he won the liverpool hackathon?", /2025/],
   ["how it answered?", /built from scratch/],
   ["How can I contact him?", /javs3@uw\.edu/],
+  // Trained as "out of 100+ competing teams"; the corrected wording must be shown.
+  ["Tell me about HackMX.", /^(?!.*competing teams)/],
 ];
 let behaviorFailed = 0;
 for (const [q, expected] of mustAnswer) {

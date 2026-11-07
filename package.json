@@ -9,9 +9,11 @@
     "lint": "eslint",
     "export:knowledge": "tsx scripts/export-knowledge.ts",
     "test:ask-alfonso": "tsx scripts/test-ask-alfonso.ts",
-    "test:rewrite": "tsx scripts/test-rewrite.ts"
+    "test:rewrite": "tsx scripts/test-rewrite.ts",
+    "test:hire-me-maybe": "tsx scripts/test-hire-me-maybe.ts"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"

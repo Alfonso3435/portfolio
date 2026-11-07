@@ -11,11 +11,11 @@ export const profile: Profile = {
   location: "Seattle Area, WA",
   email: "javs3@uw.edu",
   siteUrl: "https://alfonsovegasol.com",
-  // TODO(Alfonso): add your resume as public/resume.pdf
+  // Rendered from src/data/resume.ts (src/app/resume.pdf/route.ts).
   resumeUrl: "/resume.pdf",
   assistantName: "Ask Alfonso",
   // TODO(Alfonso): add your headshot as public/headshot.jpg and uncomment (hero circle + About photo)
-  headshot: "/headshot.jpg",
+  // headshot: "/headshot.jpg",
   links: {
     github: "https://github.com/Alfonso3435",
     linkedin: "https://www.linkedin.com/in/juan-alfonso-vega-sol-752284285/",

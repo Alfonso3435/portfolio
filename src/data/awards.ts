@@ -35,7 +35,7 @@ export const awards: Award[] = [
     year: 2025,
     projectSlug: "identifeye",
     summary:
-      "Won 1st place as team HanLovers, out of 100+ competing teams, with IdentifEye, a visual product search that matches customer photos to Liverpool's catalog.",
+      "Won 1st place in Liverpool's challenge as team HanLovers, at a hackathon of 100+ teams, with IdentifEye, a visual product search that matches customer photos to Liverpool's catalog.",
     aliases: ["Liverpool hackathon", "Liverpool challenge", "Liverpool AI Challenge"],
   },
   {

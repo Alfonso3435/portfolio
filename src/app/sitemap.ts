@@ -7,7 +7,7 @@ import { navItems } from "@/lib/nav";
 // Served at /sitemap.xml. Tells Google every page that exists, including each
 // case study — new projects in projects.ts are added automatically.
 export default function sitemap(): MetadataRoute.Sitemap {
-  const pages = [...navItems, ...(features.lab ? [{ href: "/ask" }] : [])].map((item) => ({
+  const pages = [...navItems, ...(features.lab ? [{ href: "/ask" }] : []), { href: "/hire-me-maybe" }].map((item) => ({
     url: `${profile.siteUrl}${item.href === "/" ? "" : item.href}`,
     priority: item.href === "/" ? 1 : 0.8,
   }));

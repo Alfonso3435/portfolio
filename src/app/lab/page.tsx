@@ -203,7 +203,7 @@ export default function LabPage() {
           </ul>
         </div>
         <div className="flex flex-col gap-4 rounded-2xl border border-line p-6">
-          <p className="font-mono text-[13px] uppercase tracking-[0.06em] text-accent">Next in the Lab</p>
+          <p className="font-mono text-[13px] uppercase tracking-[0.06em] text-accent">Also in the Lab</p>
           {labTools.map((t) => (
             <div key={t.name} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -212,6 +212,14 @@ export default function LabPage() {
               </div>
               <p className="text-[15px] text-muted">{t.description}</p>
               <p className="font-mono text-xs text-muted">Built on: {t.builtOn}</p>
+              {t.href && t.status === "live" ? (
+                <Link
+                  href={t.href}
+                  className="mt-1 inline-flex min-h-11 items-center self-start rounded-full bg-accent px-5 font-semibold text-on-accent hover:opacity-90"
+                >
+                  Try {t.name}
+                </Link>
+              ) : null}
             </div>
           ))}
         </div>

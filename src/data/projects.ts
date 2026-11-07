@@ -27,7 +27,7 @@ export const projects: Project[] = [
     ],
     stack: ["Vertex AI", "GPT-4 Vision", "OpenCV", "Flask", "React", "Vite", "Google Cloud Run", "Firebase", "scikit-learn"],
     results: [
-      "1st place in the El Puerto de Liverpool AI Challenge at HackMX VI, out of 100+ competing teams.",
+      "1st place in the El Puerto de Liverpool AI Challenge at HackMX VI, a hackathon of 100+ teams across several company challenges.",
       "Liverpool publicly congratulated the team on LinkedIn.",
     ],
     awardId: "hackmx-2025",

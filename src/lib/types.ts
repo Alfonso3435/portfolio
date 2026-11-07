@@ -185,4 +185,6 @@ export interface LabTool {
   builtOn: string;
   priority: 1 | 2 | 3;
   status: LabToolStatus;
+  /** Where the tool lives once it's live. */
+  href?: string;
 }

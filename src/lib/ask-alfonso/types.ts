@@ -87,6 +87,8 @@ export interface KnowledgeJson {
   site: string;
   /** The model writes model_email (the address it was trained with); replies show email. */
   contact: { email: string; model_email: string };
+  /** [trained wording, corrected wording] pairs applied to every reply. */
+  corrections?: [string, string][];
 }
 
 export type ReplyStatus = "answered" | "refused" | "private" | "fallback";

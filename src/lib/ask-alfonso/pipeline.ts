@@ -94,7 +94,10 @@ export class AskAlfonso {
    */
   private toVisitor(text: string): string {
     const { email, model_email } = this.k.contact;
-    return model_email && model_email !== email ? text.replaceAll(model_email, email) : text;
+    let out = model_email && model_email !== email ? text.replaceAll(model_email, email) : text;
+    // Wording corrected in the data after training (TRAINED_CORRECTIONS in pipeline.py).
+    for (const [old, corrected] of this.k.corrections ?? []) out = out.replaceAll(old, corrected);
+    return out;
   }
 
   /** Drop the weakest chunk until the prompt leaves room for the answer. */

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CopyEmailButton } from "@/components/contact/CopyEmailButton";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Container } from "@/components/ui/Container";
@@ -27,6 +28,13 @@ export default function ContactPage() {
           <ButtonLink href={`mailto:${profile.email}`}>{profile.email}</ButtonLink>
           <CopyEmailButton email={profile.email} />
         </div>
+        <p className="text-muted">
+          Hiring for a specific role?{" "}
+          <Link href="/hire-me-maybe" className="text-accent hover:text-fg">
+            Paste the job description into Hire Me Maybe
+          </Link>{" "}
+          and get my résumé tailored to it.
+        </p>
       </div>
 
       <ul className="flex min-w-0 flex-[1_1_360px] flex-col self-start border-t border-line">

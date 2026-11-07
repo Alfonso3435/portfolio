@@ -99,11 +99,12 @@ export const labLimits = [
 // Interactive tools for the Lab. Flip `status` to "live" as each one ships.
 export const labTools: LabTool[] = [
   {
-    name: "Recruiter Match",
+    name: "Hire Me Maybe",
     description:
-      "Paste a job description and see my projects and skills ranked by fit, with the evidence for each requirement.",
-    builtOn: "TF-IDF from Can AI Spot a Lie? and Ask Alfonso's retriever",
+      "Paste a job description and get my résumé tailored to it. Claude judges the fit and picks from pre-approved content; it never writes résumé text, so nothing can be invented.",
+    builtOn: "Claude API structured outputs + the same typed data that builds this site",
     priority: 1,
-    status: "planned",
+    status: "live",
+    href: "/hire-me-maybe",
   },
 ];

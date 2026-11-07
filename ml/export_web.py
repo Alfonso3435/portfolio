@@ -36,7 +36,7 @@ import torch  # noqa: E402
 from askalfonso import guardrails as G  # noqa: E402
 from askalfonso import retrieval as R  # noqa: E402
 from askalfonso.knowledge import SITE, Knowledge, award_aliases, tech_aliases  # noqa: E402
-from askalfonso.pipeline import AskAlfonso, PipelineConfig  # noqa: E402
+from askalfonso.pipeline import TRAINED_CORRECTIONS, AskAlfonso, PipelineConfig  # noqa: E402
 from askalfonso.prompt import ANSWER, CONTEXT, END, QUESTION  # noqa: E402
 
 SITE_ROOT = ML.parent
@@ -122,6 +122,7 @@ def export_knowledge(bot: AskAlfonso, kb: Knowledge) -> dict:
         "site": SITE,
         # The model writes model_email (the address it was trained with); replies show email.
         "contact": {"email": bot.email, "model_email": bot.model_email},
+        "corrections": [list(c) for c in TRAINED_CORRECTIONS],
     }
 
 

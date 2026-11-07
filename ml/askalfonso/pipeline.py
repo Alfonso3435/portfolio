@@ -44,6 +44,18 @@ from .training_data import CONTEXT_SEPARATOR
 # whose data already uses the new address.
 TRAINED_EMAIL: str | None = "ponchovegasol@gmail.com"
 
+# Wording the checkpoint learned that has since been corrected in the site's data. Same idea
+# as the email: the model keeps its trained phrasing, visitors see the corrected one. Empty
+# this after the next retraining.
+TRAINED_CORRECTIONS: tuple[tuple[str, str], ...] = (
+    # HackMX had 100+ teams across several company challenges; the 1st place was in Liverpool's.
+    # Most specific first, so the common answers match the new data word for word.
+    ("1st place as team HanLovers, out of 100+ competing teams,",
+     "1st place in Liverpool's challenge as team HanLovers, at a hackathon of 100+ teams,"),
+    ("at HackMX VI, out of 100+ competing teams.", "at HackMX VI, a hackathon of 100+ teams across several company challenges."),
+    ("out of 100+ competing teams", "at a hackathon of 100+ teams"),
+)
+
 
 @dataclass
 class PipelineConfig:
@@ -134,8 +146,12 @@ class AskAlfonso:
         return self._cache[key]
 
     def to_visitor(self, text: str) -> str:
-        """The model's text with the address it was trained on replaced by the current one."""
-        return text.replace(self.model_email, self.email) if self.model_email != self.email else text
+        """The model's text with the address and wording it was trained on replaced by the current ones."""
+        if self.model_email != self.email:
+            text = text.replace(self.model_email, self.email)
+        for old, new in TRAINED_CORRECTIONS:
+            text = text.replace(old, new)
+        return text
 
     # ── the whole thing ────────────────────────────────────────────────────────────
     def ask(self, question: str) -> Reply:
