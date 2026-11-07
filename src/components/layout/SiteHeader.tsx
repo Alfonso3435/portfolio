@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { profile } from "@/data/profile";
-import { features } from "@/lib/features";
 import { isActive, navItems } from "@/lib/nav";
 
 export function SiteHeader() {
@@ -43,14 +42,13 @@ export function SiteHeader() {
           </ul>
         </nav>
 
-        {features.lab ? (
-          <Link
-            href="/ask"
-            className="inline-flex min-h-11 items-center rounded-full bg-accent px-[18px] text-[15px] font-semibold text-on-accent transition-opacity hover:opacity-90"
-          >
-            {profile.assistantName}
-          </Link>
-        ) : null}
+        {/* Ask Alfonso and Hire Me Maybe are tabs now, so the button is the one thing recruiters want most. */}
+        <a
+          href={profile.resumeUrl}
+          className="inline-flex min-h-11 items-center rounded-full bg-accent px-[18px] text-[15px] font-semibold text-on-accent transition-opacity hover:opacity-90"
+        >
+          Résumé
+        </a>
       </Container>
     </header>
   );

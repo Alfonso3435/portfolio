@@ -262,8 +262,8 @@ export const projectBank: ResumeProject[] = [
     name: "Ask Alfonso",
     subtitle: "Language Model Built from Scratch",
     stack: "Python, PyTorch, TypeScript",
-    right: "alfonsovegasol.com/lab",
-    rightHref: "https://alfonsovegasol.com/lab",
+    right: "alfonsovegasol.com/ask",
+    rightHref: "https://alfonsovegasol.com/ask",
     priority: 1,
     about: "His flagship: decoder-only transformer, BPE tokenizer, training, TF-IDF retrieval, guardrails, evaluation, browser deployment.",
     bullets: [

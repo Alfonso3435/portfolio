@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AskChat } from "@/components/ask/AskChat";
+import { AskStory } from "@/components/ask/AskStory";
 import { Container } from "@/components/ui/Container";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { profile } from "@/data/profile";
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
   // Hidden until launch (src/lib/features.ts): keep it out of search results too.
   ...(features.lab ? {} : { robots: { index: false, follow: false } }),
   title: profile.assistantName,
-  description: `Ask questions about ${profile.name}'s projects, skills and experience. ${profile.assistantName} is a small language model he built from scratch; it runs entirely in your browser.`,
+  description: `Chat with ${profile.assistantName}, a 3.9M-parameter language model ${profile.name} built from scratch, and see how it works: architecture, training and test results.`,
 };
 
 // Every one of these is answered from src/data (the same data that builds the site).
@@ -27,12 +28,11 @@ export default function AskPage() {
   if (!features.lab) notFound();
   return (
     <Container className="flex flex-col gap-10 py-16 pb-24">
-      <PageIntro eyebrow="Ask" title={`${profile.assistantName}`}>
-        A 3.9M-parameter language model I built from scratch (tokenizer, transformer, training and retrieval)
-        that answers only from my real profile data. It runs entirely in your browser: nothing you type leaves your
-        device.{" "}
-        <Link href="/lab" className="text-accent hover:text-fg">
-          How it works →
+      <PageIntro eyebrow="Language model" title={`${profile.assistantName}`}>
+        Ask about my projects, skills or experience. It&apos;s a 3.9M-parameter language model I built from scratch,
+        it answers only from my real data, and it runs entirely in your browser.{" "}
+        <Link href="#how-it-works" className="text-accent hover:text-fg">
+          How it works ↓
         </Link>
       </PageIntro>
 
@@ -51,6 +51,10 @@ export default function AskPage() {
           </a>
           .
         </p>
+      </div>
+
+      <div className="mt-14 border-t border-line pt-16">
+        <AskStory />
       </div>
     </Container>
   );

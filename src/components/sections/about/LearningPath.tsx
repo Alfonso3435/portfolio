@@ -26,8 +26,8 @@ export function LearningPath() {
             <p className="font-mono text-xs text-accent">NOW</p>
             <p className="mt-0.5 font-medium">
               {profile.assistantName}: a transformer built from scratch{" "}
-              <Link href="/lab" className="text-accent hover:text-fg">
-                → see the Lab
+              <Link href="/ask#how-it-works" className="text-accent hover:text-fg">
+                → see how it works
               </Link>
             </p>
           </li>

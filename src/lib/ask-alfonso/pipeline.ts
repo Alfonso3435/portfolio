@@ -49,7 +49,7 @@ export class AskAlfonso {
       `I'm a ${params}M-parameter language model Alfonso built from scratch: tokenizer, transformer, training and ` +
       `retrieval. For each question I find the most relevant parts of his profile, read them and answer only from ` +
       `them; guardrails block anything that isn't in his data. Open "How it answered" under any reply to see those ` +
-      `steps, or read the full story at ${knowledge.site}/lab.`;
+      `steps, or scroll down this page for the full story: architecture, training and test results.`;
   }
 
   /**

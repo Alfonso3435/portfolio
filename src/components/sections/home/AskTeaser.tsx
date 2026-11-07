@@ -46,7 +46,7 @@ export function AskTeaser() {
         <Link href="/ask" className="text-[15px] font-semibold text-accent hover:text-fg">
           Open the chat →
         </Link>
-        <Link href="/lab" className="text-[15px] text-muted hover:text-fg">
+        <Link href="/ask#how-it-works" className="text-[15px] text-muted hover:text-fg">
           How it&apos;s built
         </Link>
       </div>

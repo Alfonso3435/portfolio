@@ -176,15 +176,3 @@ export interface Certification {
 
 // ── Lab page ────────────────────────────────────────────────────────────────
 
-export type LabToolStatus = "planned" | "in-progress" | "live";
-
-export interface LabTool {
-  name: string;
-  description: string;
-  /** What it reuses from earlier work. */
-  builtOn: string;
-  priority: 1 | 2 | 3;
-  status: LabToolStatus;
-  /** Where the tool lives once it's live. */
-  href?: string;
-}

@@ -10,9 +10,10 @@ export const navItems: NavItem[] = [
   { href: "/", label: "Home" },
   { href: "/projects", label: "Projects" },
   { href: "/about", label: "About" },
-  { href: "/lab", label: "Lab" },
+  { href: "/ask", label: "Ask Alfonso" },
+  { href: "/hire-me-maybe", label: "Hire Me Maybe" },
   { href: "/contact", label: "Contact" },
-].filter((item) => features.lab || item.href !== "/lab");
+].filter((item) => features.lab || item.href !== "/ask");
 
 /** "/projects/identifeye" should still highlight the Projects tab. */
 export function isActive(pathname: string, href: string): boolean {

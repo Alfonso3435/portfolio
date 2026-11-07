@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { SERIES } from "@/components/lab/chartColors";
+import { SERIES } from "@/components/ask/chartColors";
 
 type Point = readonly [epoch: number, train: number, dev: number];
 

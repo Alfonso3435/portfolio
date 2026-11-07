@@ -1,4 +1,4 @@
-import { CONTEXT, SERIES } from "@/components/lab/chartColors";
+import { CONTEXT, SERIES } from "@/components/ask/chartColors";
 
 interface Version {
   version: string;

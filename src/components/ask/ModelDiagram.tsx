@@ -1,4 +1,4 @@
-import { SERIES } from "@/components/lab/chartColors";
+import { SERIES } from "@/components/ask/chartColors";
 import { labMetrics } from "@/data/lab-metrics";
 
 const k = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : `${Math.round(n / 1000)}K`);

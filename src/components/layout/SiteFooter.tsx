@@ -28,8 +28,8 @@ export function SiteFooter() {
           </li>
           {features.lab ? (
             <li>
-              <Link href="/lab" className="text-accent hover:text-fg">
-                How I built this →
+              <Link href="/ask#how-it-works" className="text-accent hover:text-fg">
+                How I built {profile.assistantName} →
               </Link>
             </li>
           ) : null}
